@@ -11,14 +11,70 @@ from scipy.spatial.distance import cosine, sqeuclidean
 import itertools
 
 class SubModular(object):
-    def __init__(self, list_bag, directed=True):
+    def __init__(self, list_bag, directed=True, inverse_flag=True):
         # 入力のリスト(n, 2)のリスト形式
         # 有向グラフで計算するか、無向グラフで計算するか
         self._directed = directed
+        # 距離を計算するときに、inverseにするのか、マイナスにするのか
+        self._inverse_flag = inverse_flag
+        # bag_of_words
+        self._list_bag = list_bag
         # inputfileからnode, edge, weightを計算
         self._list_node, self._list_edge, self._list_weight = self._cal_node_edge_weight(list_bag)
         # 単語のword_idのdictを作成する
         self._dict_word_id = {word: i for i, word in enumerate(self._list_node)}
+        # 距離行列の作成
+        self._matrix = self._cal_matrix_path_out(inverse_flag=self._inverse_flag)
+        # 全単語のリスト
+        self._list_all_word = [word for row in self._list_bag for word in row]
+        # 抽出した文章の集合
+        self._list_C = []
+
+    @property
+    def dict_word_id(self):
+        print 'property: dict_word_id'
+        return self._dict_word_id
+
+    @dict_word_id.setter
+    def dict_word_id(self, value):
+        print 'setter: dict_word_id'
+        self._dict_word_id = value
+
+    @dict_word_id.deleter
+    def dict_word_id(self):
+        print 'deleter: dict_word_id'
+        del self._dict_word_id
+
+    @property
+    def matrix(self):
+        print 'property: matrix'
+        return self._matrix
+
+    @matrix.setter
+    def matrix(self, value):
+        print 'setter: matrix'
+        self._matrix = value
+
+    @matrix.deleter
+    def matrix(self):
+        print 'deleter: matrix'
+        del self._matrix
+
+    @property
+    def list_C(self):
+        print 'property: list_C'
+        return self._list_C
+
+    @list_C.setter
+    def list_C(self, value):
+        print 'setter: list_C'
+        self._list_C = value
+
+    @list_C.deleter
+    def list_C(self):
+        print 'deleter: list_C'
+        del self._list_C
+        self._list_C = []
     
     # 入力されたエッジリストから、list_node, list_edge, list_weightを計算する
     def _cal_node_edge_weight(self, list_bag):
@@ -42,7 +98,7 @@ class SubModular(object):
         else:
             list_edgelist = self._cal_bag_edgelist(list_bag)
             # 有向エッジリストを無向エッジリストに変換する
-            list_edge = [tuple(sort(row)) for row in list_edgelist]
+            list_edge = [tuple(sorted(row)) for row in list_edgelist]
             # ノードリスト
             list_node = list(set([word for row in list_edgelist for word in row]))
             # エッジリストとそのweightを作成
@@ -54,6 +110,7 @@ class SubModular(object):
         """
         bag_of_wordsをedgelistに変換する
         list_bag: bag_of_words
+        return: list_edgelist
         """
         # 有向グラフの場合
         if self._directed == True:
@@ -70,13 +127,14 @@ class SubModular(object):
             return list_edgelist
         
     # ノード間の距離を計算する
-    def _cal_matrix_path_out(self, inverse_flag=True, weight=5):
+    def _cal_matrix_path_out(self, inverse_flag=True, weight=5, fill='max'):
         """
         list_node: nodeのリスト
         list_edge: edgeのリスト
         list_weight: 重みのリスト
         weight: flag=Falseの場合、重みをいくつ履かせるか
         inverse_flag: ノード間の距離を計算するときに、inverseにするか、マイナスにするかのflag
+        fill: パスが存在しない場合に、なんの値を入れるか。
         matrix: 計算後のノード間の距離が記録されたmatrix, (i,j)成分はノードiからノードjへの距離を表している。
         """
         
@@ -98,8 +156,120 @@ class SubModular(object):
             for j, row in enumerate(list_path):
                 if len(row) > 0:
                     matrix[i, j] = np.sum(list_out_weight[row])
-        return matrix.tocsr()
 
+        # matrixをarray型に変換
+        matrix = matrix.toarray()
+        # maxの値を取得
+        max_value = np.amax(matrix)
+        # 0の要素にmax_valueを代入する
+        matrix[matrix==0] = max_value
+        # 対角成分は0にする（自分から自分への距離は0)
+        for i, row in enumerate(matrix):
+            matrix[i][i] = 0
+        return matrix
+
+    def _cal_cost(self, list_c_word, scale):
+        """
+        コストの計算
+        :param list_c_word: 現在採用している文の中に含まれる単語
+        :param distance_matrix: W * Vの距離行列
+        :param scale: スケール関数に何を使うか, 0: e^x, 1: x, 2: ln_x
+        :return: f_C (計算したコスト)
+        """
+        # 単語をidに変換
+        list_c_id = sorted([self._dict_word_id[word] for word in list_c_word])
+        f_C = 0.0
+        # すべての単語を検索
+        for word in self._list_all_word:
+            # 行番号
+            row_id = self._dict_word_id[word]
+            # 対象の行の抜き出し
+            row = self._matrix[row_id][list_c_id]
+            # スケーリング関数: e^x
+            if scale == 0:
+                f_C -= np.exp(np.amin(row))
+            # スケーリング関数: x
+            elif scale == 1:
+                f_C -= np.amin(row)
+            # スケーリング関数: ln_x
+            else:
+                f_C -= np.log(np.amin(row))
+        return f_C
+
+    def _m_greedy_1(self, list_C, list_id_document, r=1, scale=0):
+        """
+        修正貪欲法の一周分
+        :param list_C: 現在採用している文のbag_of_words
+        :param list_id_document: それ以外の採用候補
+        :param distance_matrix: 距離行列, W * V
+        :param r: 文字数に対するコストをどれだけかけるか
+        :param scale: スケーリング関数、0: e^x, 1: x, 2: ln_x
+        :return: doc: idとその単語のリスト
+        """
+        # list_Cが空の時
+        if len(list_C) == 0:
+            # 計算したスコアを記録するためのリスト
+            list_id_score = []
+            for doc_id, document in list_id_document:
+                # documentに含まれる単語のリスト
+                list_c_word = sorted(list(set([word for word in document])))
+                # スコアの計算
+                f_C = self._cal_cost(list_c_word=list_c_word,
+                                     scale=scale)
+                f_C = f_C/(np.power(len(document), r))
+                # リストにidとbagとスコアを記録
+                list_id_score.append([doc_id, document, f_C])
+            # スコアが最大になるものを取得
+            doc_id, document, _ = sorted(list_id_score, key=lambda x: x[2], reverse=True)[0]
+            return [doc_id, document]
+        # list_Cが空ではないとき
+        else:
+            # 現在のlist_Cに含まれるユニークな単語のリストを作成
+            list_c_word = sorted(list(set([word for row in list_C for word in row[1]])))
+            # f_C: 現在のコストの計算
+            f_C = self._cal_cost(list_c_word=list_c_word,
+                                 scale=scale)
+            print f_C
+            # 文書を一つずつ追加した時のスコアの増分を計算する
+            list_id_score = []
+            for doc_id, document in list_id_document:
+                # 文章の追加
+                list_c_word_s = list(set(list_c_word + document))
+                # コストの計算
+                f_C_s = self._cal_cost(list_c_word=list_c_word_s,
+                                       scale=scale)
+                # スコアの増分を計算
+                delta = (f_C_s - f_C) / np.power(len(document), r)
+                # スコアの増分を記録
+                list_id_score.append([doc_id, document, delta])
+            # スコアの増分が一番大きかったdocを返す
+            doc_id, document, _ = sorted(list_id_score, key=lambda x: x[2], reverse=True)[0]
+            return [doc_id, document]
+
+    def m_greedy(self, num_s=5, r=1, scale=0):
+        """
+        修正貪欲法による文章の抽出
+        :param num_s: 抽出する文書数
+        :param r: 単語数に対するコストのパラメータ
+        :param scale: スケーリング関数, 0: e^x, 1: x, 2: ln_x
+        :return: 抽出した文章のidとそのbag_of_wordsのリスト
+        """
+        # list_id_documentの作成
+        list_id_document = [[i, row] for i, row in enumerate(self._list_bag)]
+        # 要約文書のリスト
+        list_C = []
+        # num_sで指定した文章数を抜き出すまで繰り返す
+        while len(list_C) < num_s:
+            # コストが一番高くなる組み合わせを計算
+            doc_id, doc = self._m_greedy_1(list_C=list_C,
+                                           list_id_document=list_id_document,
+                                           r=r, scale=scale)
+            # 採用したリストをappend
+            list_C.append([doc_id, doc])
+            # 元の集合からremove
+            list_id_document.remove([doc_id, doc])
+
+        self._list_C = list_C
 
 # ベクトル操作をするためのクラス
 class Vector(object):
