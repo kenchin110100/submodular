@@ -13,9 +13,11 @@ from filer2.filer2 import Filer
 
 class PRTM(object):
 
-    def __init__(self, inputpath):
+    def __init__(self, inputpath, directed_flag):
         # データを読み込んで、重み付き向こうグラフに変更する
         self._inputpath = inputpath
+        # 有向グラフで計算するか、無向グラフで計算するかのflag
+        self._directed = directed_flag
         if type(self._inputpath) == 'string':
             _list_edge = Filer.readcsv(self._inputpath)
         else:
@@ -26,7 +28,7 @@ class PRTM(object):
         self._g_master.add_vertices(self._dict_network["vertex"])
         self._g_master.add_edges(self._dict_network["edge"])
         # 元のネットワークのpagerankを求める
-        self._dict_network["pagerank"] = self._g_master.pagerank(directed=False, weights=self._dict_network["weight"])
+        self._dict_network["pagerank"] = self._g_master.pagerank(directed=self._directed, weights=self._dict_network["weight"])
         # ダミーのネットワーク、これを操作用とする
         self._dict_network_dammy = copy.deepcopy(self._dict_network)
         # 計算した後のサブネットワークの情報を記録するリスト
@@ -108,8 +110,8 @@ class PRTM(object):
 
     # 有向エッジリストを入力して、重み付き無向ネットワークを出力する
     def _cal_edgelist_to_network(self, list_edge):
-        # 有向グラフならば
-        if len(list_edge[0]) == 2:
+        # 無向グラフならば
+        if self._directed == False:
             # 有向エッジリストを無向エッジリストに変換する
             list_edge = [tuple(sorted(row)) for row in list_edge]
             # ノードリスト
@@ -118,20 +120,16 @@ class PRTM(object):
             tuple_edge, tuple_weight = zip(*collections.Counter(list_edge).items())
 
             return {"vertex": list_vertices, "edge": list(tuple_edge), "weight": list(tuple_weight)}
-
-        # 重み付き無向グラフならば
-        if len(list_edge[0]) == 3:
-            list_vertex = []
-            list_edge_rev = []
-            list_weight = []
-            for row in list_edge:
-                list_vertex.append(row[0])
-                list_vertex.append(row[1])
-                list_edge_rev.append([row[0], row[1]])
-                list_weight.append(float(row[2]))
-            list_vertex = list(set(list_vertex))
-
-            return {"vertex": list_vertex, "edge": list_edge_rev, "weight": list_weight}
+        # 有向グラフならば
+        else:
+            # 有向エッジリストをtupleに変換
+            list_edge = [tuple(row) for row in list_edge]
+            # ノードリスト
+            list_vertices = list(set([word for row in list_edge for word in row]))
+            # エッジリストとそのweightを作成
+            tuple_edge, tuple_weight = zip(*collections.Counter(list_edge).items())
+            
+            return {"vertex": list_vertices, "edge": list(tuple_edge), "weight": list(tuple_weight)}
 
     def _cal_cluster_to_network(self, dict_network):
         if dict_network.has_key("cluster") == False:
@@ -198,7 +196,7 @@ class PRTM(object):
         return k_opt
 
     # 計算をするメインの関数
-    def fit(self, n=0, flag_louvain=False, directed = False):
+    def fit(self, n=0, flag_louvain=False):
         # 内部変数の初期化
         self._list_dict_subnetwork = []
         self._dict_network_dammy = copy.deepcopy(self._dict_network)
@@ -217,7 +215,7 @@ class PRTM(object):
                 self._dict_network_dammy["cluster"] = self._g_master.community_fastgreedy(weights=self._dict_network_dammy["weight"]).as_clustering(n=n).membership
 
         # 元のネットワークのpagerankを求める
-        self._dict_network_dammy["pagerank"] = self._g_master.pagerank(directed=directed, weights=self._dict_network_dammy["weight"])
+        self._dict_network_dammy["pagerank"] = self._g_master.pagerank(directed=self._directed, weights=self._dict_network_dammy["weight"])
 
         # クラスタ結果をもとにサブグラフのリストを作成
         self._list_dict_subnetwork = self._cal_cluster_to_network(self._dict_network_dammy)
@@ -227,7 +225,7 @@ class PRTM(object):
             g_sub = Graph()
             g_sub.add_vertices(dict_subnetwork["vertex"])
             g_sub.add_edges(dict_subnetwork["edge"])
-            self._list_dict_subnetwork[i]["pagerank"] = g_sub.pagerank(directed=directed, weights=dict_subnetwork["weight"])
+            self._list_dict_subnetwork[i]["pagerank"] = g_sub.pagerank(directed=self._directed, weights=dict_subnetwork["weight"])
 
         # トピックごとにwordを入力したらp(word|topic)が出るような辞書を作成
         for i in range(len(self._list_dict_subnetwork)):
