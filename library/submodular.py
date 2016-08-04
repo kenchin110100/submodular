@@ -11,16 +11,37 @@ from scipy.spatial.distance import cosine, sqeuclidean, euclidean
 import itertools
 
 class SubModular(object):
-    def __init__(self, list_bag, directed=True, inverse_flag=True):
-        # 入力のリスト(n, 2)のリスト形式
+    def __init__(self, list_bag=None, list_edgelist=None, directed=True, inverse_flag=True):
         # 有向グラフで計算するか、無向グラフで計算するか
         self._directed = directed
         # 距離を計算するときに、inverseにするのか、マイナスにするのか
         self._inverse_flag = inverse_flag
-        # bag_of_words
-        self._list_bag = list_bag
-        # inputfileからnode, edge, weightを計算
-        self._list_node, self._list_edge, self._list_weight = self._cal_node_edge_weight(list_bag)
+
+        # エッジリストとして入力するか、bag of wordsとして入力するか
+        if list_bag != None and list_edgelist != None:
+            # bag_of_words
+            self._list_bag = list_bag
+            # inputfileからnode, edge, weightを計算
+            self._list_node, self._list_edge, self._list_weight = self._cal_node_edge_weight(list_bag)
+            # エッジの再計算
+            list_edge = [tuple(row) for row in list_edgelist]
+            tuple_edge, tuple_weight = zip(*collections.Counter(list_edge).items())
+            self._list_edge = list(tuple_edge)
+            self._list_weight = list(tuple_weight)
+            # エッジリストにはあるがノードリストにはない単語を追加する
+            list_node_add = list(set([word for row in self._list_edge for word in row]))
+            self._list_node = list(set(self._list_node + list_node_add))
+
+        elif list_bag != None and list_edgelist == None:
+            # bag_of_words
+            self._list_bag = list_bag
+            # inputfileからnode, edge, weightを計算
+            self._list_node, self._list_edge, self._list_weight = self._cal_node_edge_weight(list_bag)
+
+        else:
+            print '入力ファイルが足りません'
+            raise
+            
         # 単語のword_idのdictを作成する
         self._dict_word_id = {word: i for i, word in enumerate(self._list_node)}
         # 距離行列の作成
@@ -59,6 +80,22 @@ class SubModular(object):
     def matrix(self):
         print 'deleter: matrix'
         del self._matrix
+
+    @property
+    def list_all_word(self):
+        print 'property: list_all_word'
+        return self._list_all_word
+
+    @list_all_word.setter
+    def list_all_word(self, value):
+        print 'setter: list_all_word'
+        self._list_all_word = value
+
+    @list_all_word.deleter
+    def list_all_word(self):
+        print 'deleter: list_all_word'
+        del self._list_all_word
+        self._list_all_word = []
 
     @property
     def list_C(self):
@@ -276,7 +313,6 @@ class Vector(object):
 
     def __init__(self, list_bag, dict_path):
         """
-
         :param list_bag: bag of words が記録されたリスト
         """
         self._list_bag = list_bag
@@ -285,14 +321,21 @@ class Vector(object):
         # ユニークな単語の列
         self._list_unique_word = list(set(self._list_all_word))
         # 単語をid化
-        self.dict_word_id = {word: i for i, word in enumerate(self._list_unique_word)}
+        self._dict_word_id = {word: i for i, word in enumerate(self._list_unique_word)}
         # 辞書の読み込み
         list_word_vec = Filer.readtsv(dict_path)
         self._dict_word_vec = {row[0]: np.array(row[1:], dtype=float) for row in list_word_vec}
         # 距離行列の作成
         self._matrix = self._cal_matrix()
         # 最終的に出力するリスト
-        self._list_C
+        self._list_C = []
+        # 総単語数の表示
+        print 'num word: ', len(self._list_all_word)
+        # 語彙数の表示
+        print 'num vocabulary: ', len(self._list_unique_word)
+        # 辞書に登録されていない単語数の表示
+        list_nonword = [word for word in self._list_unique_word if word not in self._dict_word_id]
+        print 'Non dictionalized word: ', len(list_nonword)
 
     @property
     def dict_word_id(self):
@@ -355,6 +398,22 @@ class Vector(object):
         print 'deleter: dict_word_vec'
         del self._dict_word_vec
         self._dict_word_vec = {}
+        
+    @property
+    def list_all_word(self):
+        print 'property: list_all_word'
+        return self._list_all_word
+
+    @list_all_word.setter
+    def list_all_word(self, value):
+        print 'setter: list_all_word'
+        self._list_all_word = value
+
+    @list_all_word.deleter
+    def list_all_word(self):
+        print 'deleter: list_all_word'
+        del self._list_all_word
+        self._list_all_word = []
 
     def _cal_matrix(self):
         """
