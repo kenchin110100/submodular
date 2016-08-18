@@ -10,6 +10,7 @@ from scipy.sparse import lil_matrix, csr_matrix, hstack
 from scipy.spatial.distance import cosine, sqeuclidean, euclidean
 import itertools
 from sklearn.cluster import KMeans
+import copy
 
 class GraphSubModular(object):
     def __init__(self, list_bag=None, list_edgelist=None, directed=True, inverse_flag=True):
@@ -284,6 +285,7 @@ class GraphSubModular(object):
             doc_id, document, _ = sorted(list_id_score, key=lambda x: x[2], reverse=True)[0]
             return [doc_id, document]
 
+
     def m_greedy(self, num_s=5, r=1, scale=0):
         """
         修正貪欲法による文章の抽出
@@ -294,6 +296,7 @@ class GraphSubModular(object):
         """
         # list_id_documentの作成
         list_id_document = [[i, row] for i, row in enumerate(self._list_bag)]
+        list_id_document_copy = copy.deepcopy(list_id_document)
         # 要約文書のリスト
         list_C = []
         # num_sで指定した文章数を抜き出すまで繰り返す
@@ -307,7 +310,27 @@ class GraphSubModular(object):
             # 元の集合からremove
             list_id_document.remove([doc_id, doc])
 
-        self._list_C = list_C
+        list_id_score = []
+        for doc_id, document in list_id_document_copy:
+            # documentに含まれる単語のリスト
+            list_c_word = sorted(list(set([word for word in document])))
+            # スコアの計算
+            f_C = self._cal_cost(list_c_word=list_c_word,
+                                 scale=scale)
+            # リストにidとbagとスコアを記録
+            list_id_score.append([doc_id, document, f_C])
+        # スコアが最大になるものを取得
+        doc_id, document, max_f = sorted(list_id_score, key=lambda x: x[2], reverse=True)[0]
+
+        list_c_word = sorted(list(set([word for row in list_C for word in row[1]])))
+        f_C = self._cal_cost(list_c_word=list_c_word, scale=scale)
+
+        if f_C >= max_f:
+            self._list_C = list_C
+        else:
+            self._list_C = [[doc_id, document]]
+
+
 
 # ベクトル操作をするためのクラス
 class Vector(object):
@@ -524,6 +547,7 @@ class Vector(object):
         """
         # list_id_documentの作成
         list_id_document = [[i, row] for i, row in enumerate(self._list_bag)]
+        list_id_document_copy = copy.deepcopy(list_id_document)
         # 要約文書のリスト
         list_C = []
         # num_sで指定した文章数を抜き出すまで繰り返す
@@ -537,7 +561,25 @@ class Vector(object):
             # 元の集合からremove
             list_id_document.remove([doc_id, doc])
 
-        self._list_C = list_C
+        list_id_score = []
+        for doc_id, document in list_id_document_copy:
+            # documentに含まれる単語のリスト
+            list_c_word = sorted(list(set([word for word in document])))
+            # スコアの計算
+            f_C = self._cal_cost(list_c_word=list_c_word,
+                                 scale=scale)
+            # リストにidとbagとスコアを記録
+            list_id_score.append([doc_id, document, f_C])
+        # スコアが最大になるものを取得
+        doc_id, document, max_f = sorted(list_id_score, key=lambda x: x[2], reverse=True)[0]
+
+        list_c_word = sorted(list(set([word for row in list_C for word in row[1]])))
+        f_C = self._cal_cost(list_c_word=list_c_word, scale=scale)
+
+        if f_C >= max_f:
+            self._list_C = list_C
+        else:
+            self._list_C = [[doc_id, document]]
 
 
     
