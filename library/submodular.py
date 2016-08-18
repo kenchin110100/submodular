@@ -626,8 +626,8 @@ class SubModular(object):
         # ユニークな単語のリスト(unigram)
         self._list_unique_word_u = list(set(self._list_all_word_u))
         # 単語のid変換の辞書(unigram)
-        self._dict_word_id_u = {i: word for i, word in enumerate(self._list_unique_word_u)}
-        self._dict_id_word_u = {word: i for i, word in self._dict_word_id_u.items()}
+        self._dict_word_id_u = {word: i for i, word in enumerate(self._list_unique_word_u)}
+        self._dict_id_word_u = {i: word for word, i in self._dict_word_id_u.items()}
         # tf-idfのマトリックスの計算（文書、単語のマトリックス）
         self._matrix_u = self._cal_matrix(self._list_bag_u,
                                           self._dict_word_id_u,
@@ -642,8 +642,8 @@ class SubModular(object):
         # ユニークな単語のリスト(bigram)
         self._list_unique_word_b = list(set(self._list_all_word_b))
         # 単語のid変換の辞書(bigram)
-        self._dict_word_id_b = {i: word for i, word in enumerate(self._list_unique_word_b)}
-        self._dict_id_word_b = {word: i for i, word in self._dict_word_id_b.items()}
+        self._dict_word_id_b = {word: i for i, word in enumerate(self._list_unique_word_b)}
+        self._dict_id_word_b = {i: word for word, i in self._dict_word_id_b.items()}
         # tf-idfのマトリックスの計算（文書、単語のマトリックス, bigram）
         self._matrix_b = self._cal_matrix(self._list_bag_b,
                                           self._dict_word_id_b,
@@ -676,20 +676,21 @@ class SubModular(object):
         # sparse_matrixのrow, col, dataを計算
         row_col_data = [[i, dict_word_id[word], float(j)/len(row)]
                         for i, row in enumerate(list_bag)
-                        for word, j in collections.Counter(row)]
+                        for word, j in collections.Counter(row).items()]
+
         row, col, data = zip(*row_col_data)
         # csr_matrixの初期化（この段階でtfになっている）
         matrix = csr_matrix((list(data), (list(row), list(col))),
                             shape=(num_row, num_col))
         # idfの辞書を作成
         list_idf = matrix.getnnz(axis=0)
-        list_idf = [np.log(float(list_bag)/num)+1 for num in list_idf]
-        dict_word_idf = {dict_id_word[i]: idf for i, idf in list_idf}
+        list_idf = [np.log(float(len(list_bag))/num)+1 for num in list_idf]
+        dict_word_idf = {dict_id_word[i]: idf for i, idf in enumerate(list_idf)}
 
         # idfの辞書をもとにもう一度matrixを作成
         row_col_data = [[i, dict_word_id[word], float(j)/len(row)*dict_word_idf[word]]
                         for i, row in enumerate(list_bag)
-                        for word, j in collections.Counter(row)]
+                        for word, j in collections.Counter(row).items()]
         row, col, data = zip(*row_col_data)
         # csr_matrixの初期化（この段階でtf-idfになっている）
         matrix = csr_matrix((list(data), (list(row), list(col))),
@@ -741,8 +742,8 @@ class SubModular(object):
         :return: R(S)のコスト
         """
         # 各クラスタごとにrをまとめたリストを作成
-        dict_cluster_r = collections.defaultdict([])
-        for cluster, r in zip(self._arr_cluster[list_id], self._r[list_id]):
+        dict_cluster_r = collections.defaultdict(list)
+        for cluster, r in zip(self._arr_cluster[list_id], self._arr_r[list_id]):
             dict_cluster_r[cluster].append(r)
 
         # R(S)の計算
