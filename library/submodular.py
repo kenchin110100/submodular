@@ -257,7 +257,6 @@ class GraphSubModular(object):
             # f_C: 現在のコストの計算
             f_C = self._cal_cost(list_c_word=list_c_word,
                                  scale=scale)
-            print f_C
             # 文書を一つずつ追加した時のスコアの増分を計算する
             list_id_score = []
             for doc_id, sep, sepall in list_id_sep_sepall:
@@ -293,7 +292,7 @@ class GraphSubModular(object):
         while len(list_id_sep_sepall):
             # コストが一番高くなる組み合わせを計算
             doc_id, sep, sepall = self._m_greedy_1(list_C=list_C,
-                                                   list_id_document=list_id_sep_sepall,
+                                                   list_id_sep_sepall=list_id_sep_sepall,
                                                    r=r, scale=scale)
             if C_word + len(sepall) <= num_w:
                 # 採用したリストをappend
@@ -321,6 +320,8 @@ class GraphSubModular(object):
             self._list_C = list_C
         else:
             self._list_C = [[doc_id, sep, sepall]]
+            
+        print '計算が終了しました'
 
 
 
@@ -513,7 +514,6 @@ class Vector(object):
             # f_C: 現在のコストの計算
             f_C = self._cal_cost(list_c_word=list_c_word,
                                  scale=scale)
-            print f_C
             # 文書を一つずつ追加した時のスコアの増分を計算する
             list_id_score = []
             for doc_id, sep, sepall in list_id_sep_sepall:
@@ -540,7 +540,7 @@ class Vector(object):
         """
         # list_id_documentの作成
         list_id_sep_sepall = [[i, row[0], row[1]] for i, row in enumerate(zip(self._list_bag, self._list_bag_all))]
-        list_id_sep_sepall = copy.deepcopy(list_id_sep_sepall)
+        list_id_sep_sepall_copy = copy.deepcopy(list_id_sep_sepall)
         # 要約文書のリスト
         list_C = []
         C_word = 0
@@ -548,7 +548,7 @@ class Vector(object):
         while len(list_id_sep_sepall):
             # コストが一番高くなる組み合わせを計算
             doc_id, sep, sepall = self._m_greedy_1(list_C=list_C,
-                                                   list_id_document=list_id_sep_sepall,
+                                                   list_id_sep_sepall=list_id_sep_sepall,
                                                    r=r, scale=scale)
             if C_word + len(sepall) <= num_w:
                 # 採用したリストをappend
@@ -576,6 +576,8 @@ class Vector(object):
             self._list_C = list_C
         else:
             self._list_C = [[doc_id, sep, sepall]]
+            
+        print '計算が終了しました'
 
 
     
@@ -611,14 +613,14 @@ class Vector(object):
 
 
 class SubModular(object):
-    def __init__(self, list_sepall, list_sep):
+    def __init__(self, list_sep_all, list_sep):
         """
         A Class of Submodular Functions for Document Summarization (Liu, et al, 2011)の実装
         :param list_bag: bag of wordsが記録されたリスト
         """
         # インプットデータの読み込み
         self._list_bag_u = list_sep
-        self._list_bag_u_all = list_sepall
+        self._list_bag_u_all = list_sep_all
 
         # パラメータの計算
         self.set_params()
@@ -824,7 +826,9 @@ class SubModular(object):
             next_id = self._greedy_1(list_rest_id, alpha=alpha, lamda=lamda)
             if C_word + len(self._list_bag_u_all[next_id]) <= num_w:
                 self._list_C_id.append(next_id)
-                self._list_C.append(self._list_bag_u[next_id])
+                self._list_C.append([next_id,
+                                     self._list_bag_u[next_id],
+                                     self._list_bag_u_all[next_id]])
                 C_word += len(self._list_bag_u_all[next_id])
             list_rest_id.remove(next_id)
 
