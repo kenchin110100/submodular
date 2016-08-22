@@ -13,37 +13,26 @@ from sklearn.cluster import KMeans
 import copy
 
 class GraphSubModular(object):
-    def __init__(self, list_bag=None, list_edgelist=None, directed=True, inverse_flag=True):
+    def __init__(self, list_sep_all, list_sep, list_edgelist, directed=True, inverse_flag=True):
         # 有向グラフで計算するか、無向グラフで計算するか
         self._directed = directed
         # 距離を計算するときに、inverseにするのか、マイナスにするのか
         self._inverse_flag = inverse_flag
 
-        # エッジリストとして入力するか、bag of wordsとして入力するか
-        if list_bag != None and list_edgelist != None:
-            # bag_of_words
-            self._list_bag = list_bag
-            # inputfileからnode, edge, weightを計算
-            self._list_node, self._list_edge, self._list_weight = self._cal_node_edge_weight(list_bag)
-            # エッジの再計算
-            list_edge = [tuple(row) for row in list_edgelist]
-            tuple_edge, tuple_weight = zip(*collections.Counter(list_edge).items())
-            self._list_edge = list(tuple_edge)
-            self._list_weight = list(tuple_weight)
-            # エッジリストにはあるがノードリストにはない単語を追加する
-            list_node_add = list(set([word for row in self._list_edge for word in row]))
-            self._list_node = list(set(self._list_node + list_node_add))
+        # bag_of_words
+        self._list_bag = list_sep
+        self._list_bag_all = list_sep_all
+        # inputfileからnode, edge, weightを計算
+        self._list_node, self._list_edge, self._list_weight = self._cal_node_edge_weight(list_sep)
+        # エッジの再計算
+        list_edge = [tuple(row) for row in list_edgelist]
+        tuple_edge, tuple_weight = zip(*collections.Counter(list_edge).items())
+        self._list_edge = list(tuple_edge)
+        self._list_weight = list(tuple_weight)
+        # エッジリストにはあるがノードリストにはない単語を追加する
+        list_node_add = list(set([word for row in self._list_edge for word in row]))
+        self._list_node = list(set(self._list_node + list_node_add))
 
-        elif list_bag != None and list_edgelist == None:
-            # bag_of_words
-            self._list_bag = list_bag
-            # inputfileからnode, edge, weightを計算
-            self._list_node, self._list_edge, self._list_weight = self._cal_node_edge_weight(list_bag)
-
-        else:
-            print '入力ファイルが足りません'
-            raise
-            
         # 単語のword_idのdictを作成する
         self._dict_word_id = {word: i for i, word in enumerate(self._list_node)}
         # 距離行列の作成
@@ -235,7 +224,7 @@ class GraphSubModular(object):
                 f_C -= np.log(np.amin(row))
         return f_C
 
-    def _m_greedy_1(self, list_C, list_id_document, r=1, scale=0):
+    def _m_greedy_1(self, list_C, list_id_sep_sepall, r=1, scale=0):
         """
         修正貪欲法の一周分
         :param list_C: 現在採用している文のbag_of_words
@@ -249,18 +238,18 @@ class GraphSubModular(object):
         if len(list_C) == 0:
             # 計算したスコアを記録するためのリスト
             list_id_score = []
-            for doc_id, document in list_id_document:
+            for doc_id, sep, sepall in list_id_sep_sepall:
                 # documentに含まれる単語のリスト
-                list_c_word = sorted(list(set([word for word in document])))
+                list_c_word = sorted(list(set([word for word in sep])))
                 # スコアの計算
                 f_C = self._cal_cost(list_c_word=list_c_word,
                                      scale=scale)
-                f_C = f_C/(np.power(len(document), r))
+                f_C = f_C/(np.power(len(sepall), r))
                 # リストにidとbagとスコアを記録
-                list_id_score.append([doc_id, document, f_C])
+                list_id_score.append([doc_id, sep, sepall, f_C])
             # スコアが最大になるものを取得
-            doc_id, document, _ = sorted(list_id_score, key=lambda x: x[2], reverse=True)[0]
-            return [doc_id, document]
+            doc_id, sep, sepall, _ = sorted(list_id_score, key=lambda x: x[3], reverse=True)[0]
+            return [doc_id, sep, sepall]
         # list_Cが空ではないとき
         else:
             # 現在のlist_Cに含まれるユニークな単語のリストを作成
@@ -271,56 +260,59 @@ class GraphSubModular(object):
             print f_C
             # 文書を一つずつ追加した時のスコアの増分を計算する
             list_id_score = []
-            for doc_id, document in list_id_document:
+            for doc_id, sep, sepall in list_id_sep_sepall:
                 # 文章の追加
-                list_c_word_s = list(set(list_c_word + document))
+                list_c_word_s = list(set(list_c_word + sep))
                 # コストの計算
                 f_C_s = self._cal_cost(list_c_word=list_c_word_s,
                                        scale=scale)
                 # スコアの増分を計算
-                delta = (f_C_s - f_C) / np.power(len(document), r)
+                delta = (f_C_s - f_C) / np.power(len(sepall), r)
                 # スコアの増分を記録
-                list_id_score.append([doc_id, document, delta])
+                list_id_score.append([doc_id, sep, sepall, delta])
             # スコアの増分が一番大きかったdocを返す
-            doc_id, document, _ = sorted(list_id_score, key=lambda x: x[2], reverse=True)[0]
-            return [doc_id, document]
+            doc_id, sep, sepall, _ = sorted(list_id_score, key=lambda x: x[3], reverse=True)[0]
+            return [doc_id, sep, sepall]
 
 
-    def m_greedy(self, num_s=5, r=1, scale=0):
+    def m_greedy(self, num_w = 100, r=1, scale=0):
         """
         修正貪欲法による文章の抽出
-        :param num_s: 抽出する文書数
+        :param num_w: 単語数の制約
         :param r: 単語数に対するコストのパラメータ
         :param scale: スケーリング関数, 0: e^x, 1: x, 2: ln_x
         :return: 抽出した文章のidとそのbag_of_wordsのリスト
         """
         # list_id_documentの作成
-        list_id_document = [[i, row] for i, row in enumerate(self._list_bag)]
-        list_id_document_copy = copy.deepcopy(list_id_document)
+        list_id_sep_sepall = [[i, row[0], row[1]] for i, row in enumerate(zip(self._list_bag, self._list_bag_all))]
+        list_id_sep_sepall_copy = copy.deepcopy(list_id_sep_sepall)
         # 要約文書のリスト
         list_C = []
         # num_sで指定した文章数を抜き出すまで繰り返す
-        while len(list_C) < num_s:
+        C_word = 0
+        while len(list_id_sep_sepall):
             # コストが一番高くなる組み合わせを計算
-            doc_id, doc = self._m_greedy_1(list_C=list_C,
-                                           list_id_document=list_id_document,
-                                           r=r, scale=scale)
-            # 採用したリストをappend
-            list_C.append([doc_id, doc])
+            doc_id, sep, sepall = self._m_greedy_1(list_C=list_C,
+                                                   list_id_document=list_id_sep_sepall,
+                                                   r=r, scale=scale)
+            if C_word + len(sepall) <= num_w:
+                # 採用したリストをappend
+                list_C.append([doc_id, sep, sepall])
+                C_word += len(sepall)
             # 元の集合からremove
-            list_id_document.remove([doc_id, doc])
+            list_id_sep_sepall.remove([doc_id, sep, sepall])
 
         list_id_score = []
-        for doc_id, document in list_id_document_copy:
+        for doc_id, sep, sepall in list_id_sep_sepall_copy:
             # documentに含まれる単語のリスト
-            list_c_word = sorted(list(set([word for word in document])))
+            list_c_word = sorted(list(set([word for word in sep])))
             # スコアの計算
             f_C = self._cal_cost(list_c_word=list_c_word,
                                  scale=scale)
             # リストにidとbagとスコアを記録
-            list_id_score.append([doc_id, document, f_C])
+            list_id_score.append([doc_id, sep, sepall, f_C])
         # スコアが最大になるものを取得
-        doc_id, document, max_f = sorted(list_id_score, key=lambda x: x[2], reverse=True)[0]
+        doc_id, sep, sepall, max_f = sorted(list_id_score, key=lambda x: x[3], reverse=True)[0]
 
         list_c_word = sorted(list(set([word for row in list_C for word in row[1]])))
         f_C = self._cal_cost(list_c_word=list_c_word, scale=scale)
@@ -328,18 +320,19 @@ class GraphSubModular(object):
         if f_C >= max_f:
             self._list_C = list_C
         else:
-            self._list_C = [[doc_id, document]]
+            self._list_C = [[doc_id, sep, sepall]]
 
 
 
 # ベクトル操作をするためのクラス
 class Vector(object):
 
-    def __init__(self, list_bag, dict_path):
+    def __init__(self, list_sep_all, list_sep, dict_path):
         """
         :param list_bag: bag of words が記録されたリスト
         """
-        self._list_bag = list_bag
+        self._list_bag = list_sep
+        self._list_bag_all = list_sep_all
         # すべての単語の列
         self._list_all_word = [word for row in self._list_bag for word in row]
         # ユニークな単語の列
@@ -487,7 +480,7 @@ class Vector(object):
                 f_C -= np.log(np.amin(row))
         return f_C
 
-    def _m_greedy_1(self, list_C, list_id_document, r=1, scale=0):
+    def _m_greedy_1(self, list_C, list_id_sep_sepall, r=1, scale=0):
         """
         修正貪欲法の一周分
         :param list_C: 現在採用している文のbag_of_words
@@ -501,18 +494,18 @@ class Vector(object):
         if len(list_C) == 0:
             # 計算したスコアを記録するためのリスト
             list_id_score = []
-            for doc_id, document in list_id_document:
+            for doc_id, sep, sepall in list_id_sep_sepall:
                 # documentに含まれる単語のリスト
-                list_c_word = sorted(list(set([word for word in document])))
+                list_c_word = sorted(list(set([word for word in sep])))
                 # スコアの計算
                 f_C = self._cal_cost(list_c_word=list_c_word,
                                      scale=scale)
-                f_C = f_C/(np.power(len(document), r))
+                f_C = f_C/(np.power(len(sepall), r))
                 # リストにidとbagとスコアを記録
-                list_id_score.append([doc_id, document, f_C])
+                list_id_score.append([doc_id, sep, sepall, f_C])
             # スコアが最大になるものを取得
-            doc_id, document, _ = sorted(list_id_score, key=lambda x: x[2], reverse=True)[0]
-            return [doc_id, document]
+            doc_id, sep, sepall, _ = sorted(list_id_score, key=lambda x: x[3], reverse=True)[0]
+            return [doc_id, sep, sepall]
         # list_Cが空ではないとき
         else:
             # 現在のlist_Cに含まれるユニークな単語のリストを作成
@@ -523,55 +516,58 @@ class Vector(object):
             print f_C
             # 文書を一つずつ追加した時のスコアの増分を計算する
             list_id_score = []
-            for doc_id, document in list_id_document:
+            for doc_id, sep, sepall in list_id_sep_sepall:
                 # 文章の追加
-                list_c_word_s = list(set(list_c_word + document))
+                list_c_word_s = list(set(list_c_word + sep))
                 # コストの計算
                 f_C_s = self._cal_cost(list_c_word=list_c_word_s,
                                        scale=scale)
                 # スコアの増分を計算
-                delta = (f_C_s - f_C) / np.power(len(document), r)
+                delta = (f_C_s - f_C) / np.power(len(sepall), r)
                 # スコアの増分を記録
-                list_id_score.append([doc_id, document, delta])
+                list_id_score.append([doc_id, sep, sepall, delta])
             # スコアの増分が一番大きかったdocを返す
-            doc_id, document, _ = sorted(list_id_score, key=lambda x: x[2], reverse=True)[0]
-            return [doc_id, document]
+            doc_id, sep, sepall, _ = sorted(list_id_score, key=lambda x: x[3], reverse=True)[0]
+            return [doc_id, sep, sepall]
 
-    def m_greedy(self, num_s=5, r=1, scale=0):
+    def m_greedy(self, num_w=100, r=1, scale=0):
         """
         修正貪欲法による文章の抽出
-        :param num_s: 抽出する文書数
+        :param num_w: 抽出する単語数の上限
         :param r: 単語数に対するコストのパラメータ
         :param scale: スケーリング関数, 0: e^x, 1: x, 2: ln_x
         :return: 抽出した文章のidとそのbag_of_wordsのリスト
         """
         # list_id_documentの作成
-        list_id_document = [[i, row] for i, row in enumerate(self._list_bag)]
-        list_id_document_copy = copy.deepcopy(list_id_document)
+        list_id_sep_sepall = [[i, row[0], row[1]] for i, row in enumerate(zip(self._list_bag, self._list_bag_all))]
+        list_id_sep_sepall = copy.deepcopy(list_id_sep_sepall)
         # 要約文書のリスト
         list_C = []
+        C_word = 0
         # num_sで指定した文章数を抜き出すまで繰り返す
-        while len(list_C) < num_s:
+        while len(list_id_sep_sepall):
             # コストが一番高くなる組み合わせを計算
-            doc_id, doc = self._m_greedy_1(list_C=list_C,
-                                           list_id_document=list_id_document,
-                                           r=r, scale=scale)
-            # 採用したリストをappend
-            list_C.append([doc_id, doc])
+            doc_id, sep, sepall = self._m_greedy_1(list_C=list_C,
+                                                   list_id_document=list_id_sep_sepall,
+                                                   r=r, scale=scale)
+            if C_word + len(sepall) <= num_w:
+                # 採用したリストをappend
+                list_C.append([doc_id, sep, sepall])
+                C_word += len(sepall)
             # 元の集合からremove
-            list_id_document.remove([doc_id, doc])
+            list_id_sep_sepall.remove([doc_id, sep, sepall])
 
         list_id_score = []
-        for doc_id, document in list_id_document_copy:
+        for doc_id, sep, sepall in list_id_sep_sepall_copy:
             # documentに含まれる単語のリスト
-            list_c_word = sorted(list(set([word for word in document])))
+            list_c_word = sorted(list(set([word for word in sep])))
             # スコアの計算
             f_C = self._cal_cost(list_c_word=list_c_word,
                                  scale=scale)
             # リストにidとbagとスコアを記録
-            list_id_score.append([doc_id, document, f_C])
+            list_id_score.append([doc_id, sep, sepall, f_C])
         # スコアが最大になるものを取得
-        doc_id, document, max_f = sorted(list_id_score, key=lambda x: x[2], reverse=True)[0]
+        doc_id, sep, sepall, max_f = sorted(list_id_score, key=lambda x: x[3], reverse=True)[0]
 
         list_c_word = sorted(list(set([word for row in list_C for word in row[1]])))
         f_C = self._cal_cost(list_c_word=list_c_word, scale=scale)
@@ -579,7 +575,7 @@ class Vector(object):
         if f_C >= max_f:
             self._list_C = list_C
         else:
-            self._list_C = [[doc_id, document]]
+            self._list_C = [[doc_id, sep, sepall]]
 
 
     
@@ -615,13 +611,14 @@ class Vector(object):
 
 
 class SubModular(object):
-    def __init__(self, list_bag):
+    def __init__(self, list_sepall, list_sep):
         """
         A Class of Submodular Functions for Document Summarization (Liu, et al, 2011)の実装
         :param list_bag: bag of wordsが記録されたリスト
         """
         # インプットデータの読み込み
-        self._list_bag_u = list_bag
+        self._list_bag_u = list_sep
+        self._list_bag_u_all = list_sepall
 
         # パラメータの計算
         self.set_params()
@@ -816,16 +813,19 @@ class SubModular(object):
 
         return max_id
 
-    def greedy(self, num_s=5, alpha=0.1, lamda=6, n_cluster=100):
+    def greedy(self, num_w=100, alpha=0.1, lamda=6, n_cluster=100):
         # アトリビュートの初期化
         self._list_C_id = []
         self._list_C = []
         self._arr_cluster = self._cal_cluster(self._matrix_ub.toarray(), n_cluster)
         list_rest_id = range(len(self._list_bag_u))
-        while len(self._list_C_id) < num_s:
+        C_word = 0
+        while len(list_rest_id):
             next_id = self._greedy_1(list_rest_id, alpha=alpha, lamda=lamda)
-            self._list_C_id.append(next_id)
-            self._list_C.append(self._list_bag_u[next_id])
+            if C_word + len(self._list_bag_u_all[next_id]) <= num_w:
+                self._list_C_id.append(next_id)
+                self._list_C.append(self._list_bag_u[next_id])
+                C_word += len(self._list_bag_u_all[next_id])
             list_rest_id.remove(next_id)
 
         print '計算が終了しました'
