@@ -13,7 +13,7 @@ from sklearn.cluster import KMeans
 import copy
 
 class GraphSubModular(object):
-    def __init__(self, list_sep_all, list_sep, list_edgelist, directed=True, inverse_flag=True):
+    def __init__(self, list_sep_all, list_sep, list_edgelist=None, directed=True, inverse_flag=True):
         # 有向グラフで計算するか、無向グラフで計算するか
         self._directed = directed
         # 距離を計算するときに、inverseにするのか、マイナスにするのか
@@ -25,13 +25,14 @@ class GraphSubModular(object):
         # inputfileからnode, edge, weightを計算
         self._list_node, self._list_edge, self._list_weight = self._cal_node_edge_weight(list_sep)
         # エッジの再計算
-        list_edge = [tuple(row) for row in list_edgelist]
-        tuple_edge, tuple_weight = zip(*collections.Counter(list_edge).items())
-        self._list_edge = list(tuple_edge)
-        self._list_weight = list(tuple_weight)
-        # エッジリストにはあるがノードリストにはない単語を追加する
-        list_node_add = list(set([word for row in self._list_edge for word in row]))
-        self._list_node = list(set(self._list_node + list_node_add))
+        if list_edgelist != None:
+            list_edge = [tuple(row) for row in list_edgelist]
+            tuple_edge, tuple_weight = zip(*collections.Counter(list_edge).items())
+            self._list_edge = list(tuple_edge)
+            self._list_weight = list(tuple_weight)
+            # エッジリストにはあるがノードリストにはない単語を追加する
+            list_node_add = list(set([word for row in self._list_edge for word in row]))
+            self._list_node = list(set(self._list_node + list_node_add))
 
         # 単語のword_idのdictを作成する
         self._dict_word_id = {word: i for i, word in enumerate(self._list_node)}
@@ -112,27 +113,15 @@ class GraphSubModular(object):
         list_edge: edgeのリスト
         list_weight: weightのリスト
         """
-        # 有向グラフの場合
-        if self._directed == True:
-            list_edgelist = self._cal_bag_edgelist(list_bag)
-            list_edge = [tuple(row) for row in list_edgelist]
-            # ノードリスト
-            list_node = list(set([word for row in list_edgelist for word in row]))
-            # エッジリストとそのweightを作成
-            tuple_edge, tuple_weight = zip(*collections.Counter(list_edge).items())
+        list_edgelist = self._cal_bag_edgelist(list_bag)
+        # 有向エッジリストを無向エッジリストに変換する
+        list_edge = [tuple(sorted(row)) for row in list_edgelist]
+        # ノードリスト
+        list_node = list(set([word for row in list_edgelist for word in row]))
+        # エッジリストとそのweightを作成
+        tuple_edge, tuple_weight = zip(*collections.Counter(list_edge).items())
 
-            return list_node, list(tuple_edge), list(tuple_weight)
-        
-        else:
-            list_edgelist = self._cal_bag_edgelist(list_bag)
-            # 有向エッジリストを無向エッジリストに変換する
-            list_edge = [tuple(sorted(row)) for row in list_edgelist]
-            # ノードリスト
-            list_node = list(set([word for row in list_edgelist for word in row]))
-            # エッジリストとそのweightを作成
-            tuple_edge, tuple_weight = zip(*collections.Counter(list_edge).items())
-
-            return list_node, list(tuple_edge), list(tuple_weight)
+        return list_node, list(tuple_edge), list(tuple_weight)
         
     def _cal_bag_edgelist(self, list_bag):
         """
@@ -140,19 +129,10 @@ class GraphSubModular(object):
         list_bag: bag_of_words
         return: list_edgelist
         """
-        # 有向グラフの場合
-        if self._directed == True:
-            list_edgelist = []
-            for row in list_bag:
-                list_tmp = [[row[i], row[i+1]] for i in range(len(row)-1)]
-                list_edgelist.extend(list_tmp)
-            return list_edgelist
-        # 無向グラフの場合
-        else:
-            list_edgelist = []
-            for row in list_bag:
-                list_edgelist.extend(list(itertools.combinations(tuple(row),2)))
-            return list_edgelist
+        list_edgelist = []
+        for row in list_bag:
+            list_edgelist.extend(list(itertools.combinations(tuple(row),2)))
+        return list_edgelist
         
     # ノード間の距離を計算する
     def _cal_matrix_path_out(self, inverse_flag=True, weight=5, fill='max'):
@@ -794,7 +774,7 @@ class SubModular(object):
 
         return R
 
-    def _greedy_1(self, list_rest_id, alpha, lamda):
+    def _m_greedy_1(self, list_rest_id, alpha, lamda, r):
         """
         貪欲法で、損失関数を最大化する、文書idを返す
         :param list_rest_id: まだ集合Sに含まれていないid(文書の列番号)が記録されたリスト
@@ -803,27 +783,35 @@ class SubModular(object):
         :return: 損失関数を最大化する文書id
         """
         # 損失関数を最大化させる文書のidとその時のリスト
-        max_F = 0
+        max_delta = 0
         max_id = 0
+        if len(self._list_C_id) == 0:
+            F_old = 0
+        else:
+            L_old = self._cal_L(self._list_C_id, alpha)
+            R_old = self._cal_R(self._list_C_id)
+            F_old = L_old + lamda*R_old
         for rest_id in list_rest_id:
             L_tmp = self._cal_L(self._list_C_id+[rest_id], alpha)
             R_tmp = self._cal_R(self._list_C_id+[rest_id])
             F_tmp = L_tmp + lamda*R_tmp
-            if F_tmp > max_F:
-                max_F = F_tmp
+            delta = (F_tmp - F_old) / np.power(len(self._list_bag_u_all[rest_id]), r)
+            if delta > max_delta:
+                max_delta = delta
                 max_id = rest_id
 
         return max_id
 
-    def greedy(self, num_w=100, alpha=0.1, lamda=6, n_cluster=100):
+    def m_greedy(self, num_w=100, alpha=0.1, lamda=6, r=1, n_cluster=100):
         # アトリビュートの初期化
         self._list_C_id = []
         self._list_C = []
         self._arr_cluster = self._cal_cluster(self._matrix_ub.toarray(), n_cluster)
         list_rest_id = range(len(self._list_bag_u))
+        list_rest_id_copy = copy.deepcopy(list_rest_id)
         C_word = 0
         while len(list_rest_id):
-            next_id = self._greedy_1(list_rest_id, alpha=alpha, lamda=lamda)
+            next_id = self._m_greedy_1(list_rest_id, alpha=alpha, lamda=lamda, r=r)
             if C_word + len(self._list_bag_u_all[next_id]) <= num_w:
                 self._list_C_id.append(next_id)
                 self._list_C.append([next_id,
@@ -831,6 +819,28 @@ class SubModular(object):
                                      self._list_bag_u_all[next_id]])
                 C_word += len(self._list_bag_u_all[next_id])
             list_rest_id.remove(next_id)
+        
+        # 全体から一つだけ抽出
+        max_delta = 0
+        max_id = 0
+        for rest_id in list_rest_id_copy:
+            L_tmp = self._cal_L([rest_id], alpha)
+            R_tmp = self._cal_R([rest_id])
+            F_tmp = L_tmp + lamda*R_tmp
+            if F_tmp > max_delta:
+                max_delta = F_tmp
+                max_id = rest_id
+                
+        # Fを比較
+        L_c = self._cal_L(self._list_C_id, alpha)
+        R_c = self._cal_R(self._list_C_id)
+        F_c = L_c + lamda*R_c
+
+        if max_delta > F_c:
+            self._list_C_id = [max_id]
+            self._list_C = [max_id,
+                            self._list_bag_u[max_id],
+                            self._list_bag_u_all[max_id]]
 
         print '計算が終了しました'
 
