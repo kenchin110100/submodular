@@ -152,7 +152,7 @@ class GraphSubModular(object):
         if inverse_flag == True:
             list_out_weight = np.float(1)/np.array(self._list_weight)
         else:
-            list_out_weight = np.max(self._list_weight)+weight - np.array(self._list_weight)
+            list_out_weight = (np.max(self._list_weight)+weight - np.array(self._list_weight))/np.max(self._list_weight)
         # sparse_matrixの定義
         matrix = lil_matrix((len(self._list_node), len(self._list_node)))
         # ノード間の距離を計算する
@@ -894,3 +894,423 @@ class Rouge_N(object):
                 numer += np.amin([dict_ans_count[key], value])
 
         return float(numer)/denom
+
+
+class Modified_GraphSubModular(GraphSubModular):
+    """
+    グラフ間の構造を用いて類似度を測定して、劣モジュラ最適化を行う
+    """
+    def __init__(self):
+        self._d_matrix = self._cal_distance_matrix()
+
+    def _cal_distance_matrix(self):
+        """
+        文書iから文書jへの距離を計算するためのメソッド
+        :return:
+        """
+        dict_word_id = self._dict_word_id
+        matrix = self.matrix
+        d_matrix = lil_matrix((len(self._list_bag), len(self._list_bag)))
+        for i, row1 in enumerate(self._list_bag):
+            list_id1 = [dict_word_id[word] for word in row1]
+            for j, row2 in enumerate(self._list_bag):
+                list_id2 = [dict_word_id[word] for word in row2]
+                matrix_rev = matrix[list_id1][:, list_id2]
+                d_matrix[i, j] = np.average(np.amin(matrix_rev, axis=1))
+
+        return d_matrix
+
+    def _cal_cost(self, list_C_id, scale):
+
+        f_C = 0.0
+        # すべての単語を検索
+        for row_id in range(self._list_bag):
+            # 対象の行の抜き出し
+            row = self._d_matrix[row_id][list_C_id]
+            # スケーリング関数: e^x
+            if scale == 0:
+                f_C -= np.exp(np.amin(row))
+            # スケーリング関数: x
+            elif scale == 1:
+                f_C -= np.amin(row)
+            # スケーリング関数: ln_x
+            else:
+                f_C -= np.log(np.amin(row))
+        return f_C
+
+    def _m_greedy_1(self, list_C_id, list_id_sep_sepall, r=1, scale=0):
+        """
+        修正貪欲法の一周分
+        :param list_C: 現在採用している文のbag_of_words
+        :param list_id_document: それ以外の採用候補
+        :param distance_matrix: 距離行列, W * V
+        :param r: 文字数に対するコストをどれだけかけるか
+        :param scale: スケーリング関数、0: e^x, 1: x, 2: ln_x
+        :return: doc: idとその単語のリスト
+        """
+        # list_Cが空の時
+        if len(list_C_id) == 0:
+            # 計算したスコアを記録するためのリスト
+            list_id_score = []
+            for doc_id, sep, sepall in list_id_sep_sepall:
+                # スコアの計算
+                f_C = self._cal_cost(list_C_id=[doc_id],
+                                     scale=scale)
+                f_C = f_C/(np.power(len(sepall), r))
+                # リストにidとbagとスコアを記録
+                list_id_score.append([doc_id, sep, sepall, f_C])
+            # スコアが最大になるものを取得
+            doc_id, sep, sepall, _ = sorted(list_id_score, key=lambda x: x[3], reverse=True)[0]
+            return [doc_id, sep, sepall]
+        # list_Cが空ではないとき
+        else:
+            # f_C: 現在のコストの計算
+            f_C = self._cal_cost(list_C_id=list_C_id,
+                                 scale=scale)
+            # 文書を一つずつ追加した時のスコアの増分を計算する
+            list_id_score = []
+            for doc_id, sep, sepall in list_id_sep_sepall:
+                # コストの計算
+                f_C_s = self._cal_cost(list_C_id=list_C_id+[doc_id],
+                                       scale=scale)
+                # スコアの増分を計算
+                delta = (f_C_s - f_C) / np.power(len(sepall), r)
+                # スコアの増分を記録
+                list_id_score.append([doc_id, sep, sepall, delta])
+            # スコアの増分が一番大きかったdocを返す
+            doc_id, sep, sepall, _ = sorted(list_id_score, key=lambda x: x[3], reverse=True)[0]
+            return [doc_id, sep, sepall]
+
+
+    def m_greedy(self, num_w = 100, r=1, scale=0):
+        """
+        修正貪欲法による文章の抽出
+        :param num_w: 単語数の制約
+        :param r: 単語数に対するコストのパラメータ
+        :param scale: スケーリング関数, 0: e^x, 1: x, 2: ln_x
+        :return: 抽出した文章のidとそのbag_of_wordsのリスト
+        """
+        # list_id_documentの作成
+        list_id_sep_sepall = [[i, row[0], row[1]] for i, row in enumerate(zip(self._list_bag, self._list_bag_all)) if len(row[0]) > 0]
+        list_id_sep_sepall_copy = copy.deepcopy(list_id_sep_sepall)
+        # 要約文書のリスト
+        list_C = []
+        list_C_id = []
+        # num_sで指定した文章数を抜き出すまで繰り返す
+        C_word = 0
+        while len(list_id_sep_sepall):
+            # コストが一番高くなる組み合わせを計算
+            doc_id, sep, sepall = self._m_greedy_1(list_C_id=list_C_id,
+                                                   list_id_sep_sepall=list_id_sep_sepall,
+                                                   r=r, scale=scale)
+            if C_word + len(sepall) <= num_w:
+                # 採用したリストをappend
+                list_C.append([doc_id, sep, sepall])
+                list_C_id.append(doc_id)
+                C_word += len(sepall)
+            # 元の集合からremove
+            list_id_sep_sepall.remove([doc_id, sep, sepall])
+
+        list_id_score = []
+        for doc_id, sep, sepall in list_id_sep_sepall_copy:
+            # スコアの計算
+            f_C = self._cal_cost(list_C_id=[doc_id],
+                                 scale=scale)
+            # リストにidとbagとスコアを記録
+            list_id_score.append([doc_id, sep, sepall, f_C])
+        # スコアが最大になるものを取得
+        doc_id, sep, sepall, max_f = sorted(list_id_score, key=lambda x: x[3], reverse=True)[0]
+
+        f_C = self._cal_cost(list_C_id=list_C_id, scale=scale)
+
+        if f_C >= max_f:
+            self._list_C = list_C
+        else:
+            self._list_C = [[doc_id, sep, sepall]]
+
+        print '計算が終了しました'
+
+
+class Modified_Vector(object):
+
+    def __init__(self, list_sep_all, list_sep, dict_path):
+        """
+        :param list_bag: bag of words が記録されたリスト
+        """
+        self._list_bag = list_sep
+        self._list_bag_all = list_sep_all
+        # すべての単語の列
+        self._list_all_word = [word for row in self._list_bag for word in row]
+        # ユニークな単語の列
+        self._list_unique_word = list(set(self._list_all_word))
+        # 単語をid化
+        self._dict_word_id = {word: i for i, word in enumerate(self._list_unique_word)}
+        self._dict_id_word = {i: word for word, i in self._dict_word_id.items()}
+        # 辞書の読み込み
+        list_word_vec = Filer.readtsv(dict_path)
+        self._dict_word_vec = {row[0]: np.array(row[1:], dtype=float) for row in list_word_vec}
+        # 単語の分散表現のmatrix
+        self._matrix_word_vec = np.array([self._dict_id_word[i] for i, word in enumerate(self._list_unique_word)])
+        # tfidfの計算
+        self._tfidf = self._cal_tfidf(list_bag=self._list_bag,
+                                      dict_word_id=self._dict_word_id,
+                                      dict_id_word=self._dict_id_word,
+                                      num_row=len(self._list_bag),
+                                      num_col=len(self._list_unique_word))
+        # 距離行列の作成
+        self._d_matrix = self._cal_matrix()
+        # 最終的に出力するリスト
+        self._list_C = []
+        # 総単語数の表示
+        print 'num word: ', len(self._list_all_word)
+        # 語彙数の表示
+        print 'num vocabulary: ', len(self._list_unique_word)
+        # 辞書に登録されていない単語数の表示
+        list_nonword = [word for word in self._list_unique_word if word not in self._dict_word_id]
+        print 'Non dictionalized word: ', len(list_nonword)
+
+    @property
+    def dict_word_id(self):
+        print 'property: dict_word_id'
+        return self._dict_word_id
+
+    @dict_word_id.setter
+    def dict_word_id(self, value):
+        print 'setter: dict_word_id'
+        self._dict_word_id = value
+
+    @dict_word_id.deleter
+    def dict_word_id(self):
+        print 'deleter: dict_word_id'
+        del self._dict_word_id
+
+    @property
+    def matrix(self):
+        print 'property: matrix'
+        return self._matrix
+
+    @matrix.setter
+    def matrix(self, value):
+        print 'setter: matrix'
+        self._matrix = value
+
+    @matrix.deleter
+    def matrix(self):
+        print 'deleter: matrix'
+        del self._matrix
+
+    @property
+    def list_C(self):
+        print 'property: list_C'
+        return self._list_C
+
+    @list_C.setter
+    def list_C(self, value):
+        print 'setter: list_C'
+        self._list_C = value
+
+    @list_C.deleter
+    def list_C(self):
+        print 'deleter: list_C'
+        del self._list_C
+        self._list_C = []
+
+    @property
+    def dict_word_vec(self):
+        print 'property: dict_word_vec'
+        return self._dict_word_vec
+
+    @dict_word_vec.setter
+    def dict_word_vec(self, value):
+        print 'setter: dict_word_vec'
+        self._dict_word_vec = value
+
+    @dict_word_vec.deleter
+    def dict_word_vec(self):
+        print 'deleter: dict_word_vec'
+        del self._dict_word_vec
+        self._dict_word_vec = {}
+
+    @property
+    def list_all_word(self):
+        print 'property: list_all_word'
+        return self._list_all_word
+
+    @list_all_word.setter
+    def list_all_word(self, value):
+        print 'setter: list_all_word'
+        self._list_all_word = value
+
+    @list_all_word.deleter
+    def list_all_word(self):
+        print 'deleter: list_all_word'
+        del self._list_all_word
+        self._list_all_word = []
+
+    def _cal_matrix(self):
+        """
+        距離行列を作成する
+        :return: matrix
+        """
+        d_matrix = np.zeros((len(self._list_bag), len(self._list_bag)))
+        # tfidfで重み付けをしたベクトルを作成する
+        s_matrix = []
+        for i, words in enumerate(self._list_bag):
+            weight = self._tfidf.getrow(i).data
+            weight = weight/np.float(np.sum(weight))
+            indice = self._tfidf.getrow(i).indices
+            s_vector = self._matrix_word_vec[indice] * weight[:,np.newaixs]
+            s_vector = np.average(s_vector, axis=0)
+            s_matrix.append[s_vector]
+
+        for i, row1 in enumerate(s_matrix):
+            for j, row2 in enumerate(s_matrix):
+                d_matrix[i][j] = euclidean(row1, row2)
+
+        return d_matrix
+
+    def _cal_tfidf(self, list_bag, dict_word_id, dict_id_word, num_row, num_col):
+        """
+        bag of wordsからtfidfのmatrixを計算する
+        :return: matrix(ただし、スパースマトリックス形式, csr_matrix)
+        """
+        # sparse_matrixのrow, col, dataを計算
+        row_col_data = [[i, dict_word_id[word], float(j)/len(row)]
+                        for i, row in enumerate(list_bag)
+                        for word, j in collections.Counter(row).items()]
+
+        row, col, data = zip(*row_col_data)
+        # csr_matrixの初期化（この段階でtfになっている）
+        matrix = csr_matrix((list(data), (list(row), list(col))),
+                            shape=(num_row, num_col))
+        # idfの辞書を作成
+        list_idf = matrix.getnnz(axis=0)
+        list_idf = [np.log(float(len(list_bag))/num)+1 for num in list_idf]
+        dict_word_idf = {dict_id_word[i]: idf for i, idf in enumerate(list_idf)}
+
+        # idfの辞書をもとにもう一度matrixを作成
+        row_col_data = [[i, dict_word_id[word], float(j)/len(row)*dict_word_idf[word]]
+                        for i, row in enumerate(list_bag)
+                        for word, j in collections.Counter(row).items()]
+        row, col, data = zip(*row_col_data)
+        # csr_matrixの初期化（この段階でtf-idfになっている）
+        matrix = csr_matrix((list(data), (list(row), list(col))),
+                            shape=(num_row, num_col))
+
+        return matrix
+
+
+    def _cal_cost(self, list_C_id, scale):
+        """
+        コストの計算
+        :param list_c_word: 現在採用している文の中に含まれる単語
+        :param distance_matrix: W * Vの距離行列
+        :param scale: スケール関数に何を使うか, 0: e^x, 1: x, 2: ln_x
+        :return: f_C (計算したコスト)
+        """
+        f_C = 0.0
+        # すべての単語を検索
+        for row_id in range(len(self._list_bag)):
+            # 対象の行の抜き出し
+            row = self._d_matrix[row_id][list_C_id]
+            # スケーリング関数: e^x
+            if scale == 0:
+                f_C -= np.exp(np.amin(row))
+            # スケーリング関数: x
+            elif scale == 1:
+                f_C -= np.amin(row)
+            # スケーリング関数: ln_x
+            else:
+                f_C -= np.log(np.amin(row))
+        return f_C
+
+    def _m_greedy_1(self, list_C_id, list_id_sep_sepall, r=1, scale=0):
+        """
+        修正貪欲法の一周分
+        :param list_C: 現在採用している文のbag_of_words
+        :param list_id_document: それ以外の採用候補
+        :param distance_matrix: 距離行列, W * V
+        :param r: 文字数に対するコストをどれだけかけるか
+        :param scale: スケーリング関数、0: e^x, 1: x, 2: ln_x
+        :return: doc: idとその単語のリスト
+        """
+        # list_Cが空の時
+        if len(list_C_id) == 0:
+            # 計算したスコアを記録するためのリスト
+            list_id_score = []
+            for doc_id, sep, sepall in list_id_sep_sepall:
+                # スコアの計算
+                f_C = self._cal_cost(list_C_id=[doc_id],
+                                     scale=scale)
+                f_C = f_C/(np.power(len(sepall), r))
+                # リストにidとbagとスコアを記録
+                list_id_score.append([doc_id, sep, sepall, f_C])
+            # スコアが最大になるものを取得
+            doc_id, sep, sepall, _ = sorted(list_id_score, key=lambda x: x[3], reverse=True)[0]
+            return [doc_id, sep, sepall]
+        # list_Cが空ではないとき
+        else:
+            # f_C: 現在のコストの計算
+            f_C = self._cal_cost(list_C_id=list_C_id,
+                                 scale=scale)
+            # 文書を一つずつ追加した時のスコアの増分を計算する
+            list_id_score = []
+            for doc_id, sep, sepall in list_id_sep_sepall:
+                # コストの計算
+                f_C_s = self._cal_cost(list_C_id=list_C_id+[doc_id],
+                                       scale=scale)
+                # スコアの増分を計算
+                delta = (f_C_s - f_C) / np.power(len(sepall), r)
+                # スコアの増分を記録
+                list_id_score.append([doc_id, sep, sepall, delta])
+            # スコアの増分が一番大きかったdocを返す
+            doc_id, sep, sepall, _ = sorted(list_id_score, key=lambda x: x[3], reverse=True)[0]
+            return [doc_id, sep, sepall]
+
+    def m_greedy(self, num_w=100, r=1, scale=0):
+        """
+        修正貪欲法による文章の抽出
+        :param num_w: 抽出する単語数の上限
+        :param r: 単語数に対するコストのパラメータ
+        :param scale: スケーリング関数, 0: e^x, 1: x, 2: ln_x
+        :return: 抽出した文章のidとそのbag_of_wordsのリスト
+        """
+        # list_id_documentの作成
+        list_id_sep_sepall = [[i, row[0], row[1]] for i, row in enumerate(zip(self._list_bag, self._list_bag_all)) if len(row[0]) > 0]
+        list_id_sep_sepall_copy = copy.deepcopy(list_id_sep_sepall)
+        # 要約文書のリスト
+        list_C = []
+        list_C_id = []
+        C_word = 0
+        # num_sで指定した文章数を抜き出すまで繰り返す
+        while len(list_id_sep_sepall):
+            # コストが一番高くなる組み合わせを計算
+            doc_id, sep, sepall = self._m_greedy_1(list_C_id=list_C_id,
+                                                   list_id_sep_sepall=list_id_sep_sepall,
+                                                   r=r, scale=scale)
+            if C_word + len(sepall) <= num_w:
+                # 採用したリストをappend
+                list_C.append([doc_id, sep, sepall])
+                list_C_id.append(doc_id)
+                C_word += len(sepall)
+            # 元の集合からremove
+            list_id_sep_sepall.remove([doc_id, sep, sepall])
+
+        list_id_score = []
+        for doc_id, sep, sepall in list_id_sep_sepall_copy:
+            # スコアの計算
+            f_C = self._cal_cost(list_C_id=[doc_id],
+                                 scale=scale)
+            # リストにidとbagとスコアを記録
+            list_id_score.append([doc_id, sep, sepall, f_C])
+        # スコアが最大になるものを取得
+        doc_id, sep, sepall, max_f = sorted(list_id_score, key=lambda x: x[3], reverse=True)[0]
+
+        f_C = self._cal_cost(list_C_id=list_C_id, scale=scale)
+
+        if f_C >= max_f:
+            self._list_C = list_C
+        else:
+            self._list_C = [[doc_id, sep, sepall]]
+
+        print '計算が終了しました'
