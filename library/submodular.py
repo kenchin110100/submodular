@@ -23,16 +23,15 @@ class GraphSubModular(object):
         self._list_bag = list_sep
         self._list_bag_all = list_sep_all
         # inputfileからnode, edge, weightを計算
-        self._list_node, self._list_edge, self._list_weight = self._cal_node_edge_weight(list_sep)
-        # エッジの再計算
-        if list_edgelist != None:
+        if list_edgelist == None:
+            self._list_node, self._list_edge, self._list_weight = self._cal_node_edge_weight(list_sep)
+        else:
+            list_node = list(set([word for row in self._list_bag for word in row]))
+            self._list_node = list_node
             list_edge = [tuple(row) for row in list_edgelist]
             tuple_edge, tuple_weight = zip(*collections.Counter(list_edge).items())
             self._list_edge = list(tuple_edge)
             self._list_weight = list(tuple_weight)
-            # エッジリストにはあるがノードリストにはない単語を追加する
-            list_node_add = list(set([word for row in self._list_edge for word in row]))
-            self._list_node = list(set(self._list_node + list_node_add))
 
         # 単語のword_idのdictを作成する
         self._dict_word_id = {word: i for i, word in enumerate(self._list_node)}
@@ -117,7 +116,7 @@ class GraphSubModular(object):
         # 有向エッジリストを無向エッジリストに変換する
         list_edge = [tuple(sorted(row)) for row in list_edgelist]
         # ノードリスト
-        list_node = list(set([word for row in list_edgelist for word in row]))
+        list_node = list(set([word for row in list_bag for word in row]))
         # エッジリストとそのweightを作成
         tuple_edge, tuple_weight = zip(*collections.Counter(list_edge).items())
 
@@ -263,7 +262,7 @@ class GraphSubModular(object):
         :return: 抽出した文章のidとそのbag_of_wordsのリスト
         """
         # list_id_documentの作成
-        list_id_sep_sepall = [[i, row[0], row[1]] for i, row in enumerate(zip(self._list_bag, self._list_bag_all))]
+        list_id_sep_sepall = [[i, row[0], row[1]] for i, row in enumerate(zip(self._list_bag, self._list_bag_all)) if len(row[0]) > 0]
         list_id_sep_sepall_copy = copy.deepcopy(list_id_sep_sepall)
         # 要約文書のリスト
         list_C = []
@@ -519,7 +518,7 @@ class Vector(object):
         :return: 抽出した文章のidとそのbag_of_wordsのリスト
         """
         # list_id_documentの作成
-        list_id_sep_sepall = [[i, row[0], row[1]] for i, row in enumerate(zip(self._list_bag, self._list_bag_all))]
+        list_id_sep_sepall = [[i, row[0], row[1]] for i, row in enumerate(zip(self._list_bag, self._list_bag_all)) if len(row[0]) > 0]
         list_id_sep_sepall_copy = copy.deepcopy(list_id_sep_sepall)
         # 要約文書のリスト
         list_C = []
@@ -681,7 +680,6 @@ class SubModular(object):
         # C(V)をリスト形式で計算
         self._arr_CV = np.sum(self._distance_matrix, axis=1)
 
-
         # 文書数の表示
         print 'num_sentence: ', len(self._list_bag_u)
         # 総単語数の表示
@@ -728,6 +726,8 @@ class SubModular(object):
         # まず行列を正規化する
         l_matrix = np.sqrt(np.sum(matrix*matrix, axis=1))
         norm_matrix = matrix / l_matrix[:, np.newaxis]
+        # 欠損値を埋める
+        norm_matrix[np.isnan(norm_matrix)] = 0
         return norm_matrix.dot(norm_matrix.T)
 
     def _cal_cluster(self, matrix, n_cluster):
@@ -807,7 +807,7 @@ class SubModular(object):
         self._list_C_id = []
         self._list_C = []
         self._arr_cluster = self._cal_cluster(self._matrix_ub.toarray(), n_cluster)
-        list_rest_id = range(len(self._list_bag_u))
+        list_rest_id = [i for i, row in enumerate(self._list_bag_u) if len(row) > 0]
         list_rest_id_copy = copy.deepcopy(list_rest_id)
         C_word = 0
         while len(list_rest_id):
