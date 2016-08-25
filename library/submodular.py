@@ -320,8 +320,7 @@ class Vector(object):
         # 単語をid化
         self._dict_word_id = {word: i for i, word in enumerate(self._list_unique_word)}
         # 辞書の読み込み
-        list_word_vec = Filer.readtsv(dict_path)
-        self._dict_word_vec = {row[0]: np.array(row[1:], dtype=float) for row in list_word_vec}
+        self._dict_word_vec = Filer.readdump(dict_path)
         # 距離行列の作成
         self._matrix = self._cal_matrix()
         # 最終的に出力するリスト
@@ -331,7 +330,7 @@ class Vector(object):
         # 語彙数の表示
         print 'num vocabulary: ', len(self._list_unique_word)
         # 辞書に登録されていない単語数の表示
-        list_nonword = [word for word in self._list_unique_word if word not in self._dict_word_id]
+        list_nonword = [word for word in self._list_unique_word if word not in self._dict_word_vec.keys()]
         print 'Non dictionalized word: ', len(list_nonword)
 
     @property
@@ -900,8 +899,9 @@ class Modified_GraphSubModular(GraphSubModular):
     """
     グラフ間の構造を用いて類似度を測定して、劣モジュラ最適化を行う
     """
-    def __init__(self):
-        self._d_matrix = self._cal_distance_matrix()
+    def __init__(self, list_sep_all, list_sep, list_edgelist=None, directed=True, inverse_flag=True):
+        super(Modified_GraphSubModular, self).__init__(list_sep_all, list_sep, list_edgelist, directed, inverse_flag)
+        self._d_matrix = self._cal_distance_matrix().toarray()
 
     def _cal_distance_matrix(self):
         """
@@ -924,7 +924,7 @@ class Modified_GraphSubModular(GraphSubModular):
 
         f_C = 0.0
         # すべての単語を検索
-        for row_id in range(self._list_bag):
+        for row_id in range(len(self._list_bag)):
             # 対象の行の抜き出し
             row = self._d_matrix[row_id][list_C_id]
             # スケーリング関数: e^x
@@ -1037,8 +1037,12 @@ class Modified_Vector(object):
         """
         :param list_bag: bag of words が記録されたリスト
         """
-        self._list_bag = list_sep
         self._list_bag_all = list_sep_all
+        # 辞書の読み込み
+        self._dict_word_vec = Filer.readdump(dict_path)
+        list_keys = self._dict_word_vec.keys()
+        self._list_bag = [[word for word in row if word in list_keys]
+                          for row in list_sep]
         # すべての単語の列
         self._list_all_word = [word for row in self._list_bag for word in row]
         # ユニークな単語の列
@@ -1046,11 +1050,8 @@ class Modified_Vector(object):
         # 単語をid化
         self._dict_word_id = {word: i for i, word in enumerate(self._list_unique_word)}
         self._dict_id_word = {i: word for word, i in self._dict_word_id.items()}
-        # 辞書の読み込み
-        list_word_vec = Filer.readtsv(dict_path)
-        self._dict_word_vec = {row[0]: np.array(row[1:], dtype=float) for row in list_word_vec}
         # 単語の分散表現のmatrix
-        self._matrix_word_vec = np.array([self._dict_id_word[i] for i, word in enumerate(self._list_unique_word)])
+        self._matrix_word_vec = np.array([self._dict_word_vec[word] for i, word in enumerate(self._list_unique_word)])
         # tfidfの計算
         self._tfidf = self._cal_tfidf(list_bag=self._list_bag,
                                       dict_word_id=self._dict_word_id,
@@ -1159,9 +1160,9 @@ class Modified_Vector(object):
             weight = self._tfidf.getrow(i).data
             weight = weight/np.float(np.sum(weight))
             indice = self._tfidf.getrow(i).indices
-            s_vector = self._matrix_word_vec[indice] * weight[:,np.newaixs]
+            s_vector = self._matrix_word_vec[indice] * weight[:,np.newaxis]
             s_vector = np.average(s_vector, axis=0)
-            s_matrix.append[s_vector]
+            s_matrix.append(s_vector)
 
         for i, row1 in enumerate(s_matrix):
             for j, row2 in enumerate(s_matrix):
