@@ -544,8 +544,6 @@ class Modified_GraphSubModular(GraphSubModular):
         g.add_edges(list_edgelist)
         G = np.array(g.get_adjacency()._data)
         G = G / np.sum(G, axis=1, dtype=float)[:,np.newaxis]
-        # 欠損値を埋める
-        G[np.isnan(G)] = 0.0
         G = G.T
         S = np.identity(len(self._list_node))
         for iter in range(iteration):
