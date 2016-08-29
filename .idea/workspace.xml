@@ -30,9 +30,11 @@
       <file leaf-file-name="submodular.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/library/submodular.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="105">
-              <caret line="7" column="24" selection-start-line="7" selection-start-column="24" selection-end-line="7" selection-end-column="24" />
-              <folding />
+            <state relative-caret-position="210">
+              <caret line="148" column="23" selection-start-line="148" selection-start-column="23" selection-end-line="148" selection-end-column="23" />
+              <folding>
+                <element signature="e#50#70#0" expanded="true" />
+              </folding>
             </state>
           </provider>
         </entry>
@@ -40,8 +42,8 @@
       <file leaf-file-name="graphsubmodular.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/library/graphsubmodular.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="235">
-              <caret line="466" column="32" selection-start-line="466" selection-start-column="32" selection-end-line="466" selection-end-column="32" />
+            <state relative-caret-position="310">
+              <caret line="546" column="16" selection-start-line="546" selection-start-column="16" selection-end-line="546" selection-end-column="16" />
               <folding>
                 <element signature="e#50#70#0" expanded="true" />
               </folding>
@@ -420,7 +422,9 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="0">
           <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
-          <folding />
+          <folding>
+            <element signature="e#50#70#0" expanded="true" />
+          </folding>
         </state>
       </provider>
     </entry>
@@ -428,7 +432,9 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="0">
           <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
-          <folding />
+          <folding>
+            <element signature="e#50#70#0" expanded="true" />
+          </folding>
         </state>
       </provider>
     </entry>
@@ -436,7 +442,9 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="0">
           <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
-          <folding />
+          <folding>
+            <element signature="e#50#70#0" expanded="true" />
+          </folding>
         </state>
       </provider>
     </entry>
@@ -444,7 +452,9 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="0">
           <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
-          <folding />
+          <folding>
+            <element signature="e#50#70#0" expanded="true" />
+          </folding>
         </state>
       </provider>
     </entry>
@@ -452,7 +462,9 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="0">
           <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
-          <folding />
+          <folding>
+            <element signature="e#50#70#0" expanded="true" />
+          </folding>
         </state>
       </provider>
     </entry>
@@ -460,7 +472,9 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="0">
           <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
-          <folding />
+          <folding>
+            <element signature="e#50#70#0" expanded="true" />
+          </folding>
         </state>
       </provider>
     </entry>
@@ -468,7 +482,9 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="0">
           <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
-          <folding />
+          <folding>
+            <element signature="e#50#70#0" expanded="true" />
+          </folding>
         </state>
       </provider>
     </entry>
@@ -481,23 +497,26 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/library/vector.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="120">
+        <state relative-caret-position="-7095">
           <caret line="8" column="34" selection-start-line="8" selection-start-column="34" selection-end-line="8" selection-end-column="34" />
+          <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/library/submodular.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="105">
-          <caret line="7" column="24" selection-start-line="7" selection-start-column="24" selection-end-line="7" selection-end-column="24" />
-          <folding />
+        <state relative-caret-position="210">
+          <caret line="148" column="23" selection-start-line="148" selection-start-column="23" selection-end-line="148" selection-end-column="23" />
+          <folding>
+            <element signature="e#50#70#0" expanded="true" />
+          </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/library/graphsubmodular.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="235">
-          <caret line="466" column="32" selection-start-line="466" selection-start-column="32" selection-end-line="466" selection-end-column="32" />
+        <state relative-caret-position="310">
+          <caret line="546" column="16" selection-start-line="546" selection-start-column="16" selection-end-line="546" selection-end-column="16" />
           <folding>
             <element signature="e#50#70#0" expanded="true" />
           </folding>
