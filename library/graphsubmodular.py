@@ -441,7 +441,7 @@ class Modified_GraphSubModular(GraphSubModular):
     """
     劣モジュラ関数を正の関数に置き換える
     """
-    def __init__(self, list_sep_all, list_sep, list_edgelist=None, directed=True, simrank_flag=True, log_flag=True):
+    def __init__(self, list_sep_all, list_sep, list_edgelist=None, directed=True, simrank_flag=True, weighted=False,  log_flag=True):
         """
 
         :param list_sep_all:
@@ -455,6 +455,8 @@ class Modified_GraphSubModular(GraphSubModular):
         self._directed = directed
         # 距離を計算するときに、simrankで計算するかそれとも平均ノード次数で計算するか
         self._simrank_flag = simrank_flag
+        # simrankを計算する時にweightをかけるかどうか
+        self._weighted = weighted
         # 平均ノード次数を計算する時に、logを使うか、使わないか
         self._log_flag = log_flag
 
@@ -477,8 +479,13 @@ class Modified_GraphSubModular(GraphSubModular):
 
         # 距離行列の作成
         if self._simrank_flag == True:
-            self._matrix = self._cal_simrank(list_edgelist=list_edgelist,
-                                             C=0.8, iteration=10)
+            if self._weighted == True:
+                self._matrix = self._cal_simrank(list_edgelist=list_edgelist,
+                                                 C=0.8, iteration=10)
+            else:
+                self._matrix = self._cal_simrank(list_edgelist=self._list_edge,
+                                                 C=0.8, iteration=10)
+
         else:
             self._matrix = self._cal_matrix_path_out(fill='max', log_flag=log_flag)
 
