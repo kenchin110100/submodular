@@ -437,7 +437,7 @@ class Sentence_GraphSubModular(GraphSubModular):
         print '計算が終了しました'
 
 
-class Modified_GraphSubModular(GraphSubModular):
+class Modified_GraphSubModular(object):
     """
     劣モジュラ関数を正の関数に置き換える
     """
@@ -494,6 +494,97 @@ class Modified_GraphSubModular(GraphSubModular):
         self._d_matrix = np.array([self._matrix[self._dict_word_id[word]] for word in self._list_all_word])
         # 抽出した文章の集合
         self._list_C = []
+        
+    @property
+    def dict_word_id(self):
+        print 'property: dict_word_id'
+        return self._dict_word_id
+
+    @dict_word_id.setter
+    def dict_word_id(self, value):
+        print 'setter: dict_word_id'
+        self._dict_word_id = value
+
+    @dict_word_id.deleter
+    def dict_word_id(self):
+        print 'deleter: dict_word_id'
+        del self._dict_word_id
+
+    @property
+    def matrix(self):
+        print 'property: matrix'
+        return self._matrix
+
+    @matrix.setter
+    def matrix(self, value):
+        print 'setter: matrix'
+        self._matrix = value
+
+    @matrix.deleter
+    def matrix(self):
+        print 'deleter: matrix'
+        del self._matrix
+
+    @property
+    def list_all_word(self):
+        print 'property: list_all_word'
+        return self._list_all_word
+
+    @list_all_word.setter
+    def list_all_word(self, value):
+        print 'setter: list_all_word'
+        self._list_all_word = value
+
+    @list_all_word.deleter
+    def list_all_word(self):
+        print 'deleter: list_all_word'
+        del self._list_all_word
+        self._list_all_word = []
+
+    @property
+    def list_C(self):
+        print 'property: list_C'
+        return self._list_C
+
+    @list_C.setter
+    def list_C(self, value):
+        print 'setter: list_C'
+        self._list_C = value
+
+    @list_C.deleter
+    def list_C(self):
+        print 'deleter: list_C'
+        del self._list_C
+        self._list_C = []
+
+    # 入力されたエッジリストから、list_node, list_edge, list_weightを計算する
+    def _cal_node_edge_weight(self, list_bag):
+        """
+        list_bag: bag_of_words
+        list_node: nodeのリスト
+        list_edge: edgeのリスト
+        list_weight: weightのリスト
+        """
+        list_edgelist = self._cal_bag_edgelist(list_bag)
+        # 有向エッジリストを無向エッジリストに変換する
+        list_edge = [tuple(sorted(row)) for row in list_edgelist]
+        # ノードリスト
+        list_node = list(set([word for row in list_bag for word in row]))
+        # エッジリストとそのweightを作成
+        tuple_edge, tuple_weight = zip(*collections.Counter(list_edge).items())
+
+        return list_node, list(tuple_edge), list(tuple_weight)
+
+    def _cal_bag_edgelist(self, list_bag):
+        """
+        bag_of_wordsをedgelistに変換する
+        list_bag: bag_of_words
+        return: list_edgelist
+        """
+        list_edgelist = []
+        for row in list_bag:
+            list_edgelist.extend(list(itertools.combinations(tuple(row),2)))
+        return list_edgelist
 
     # ノード間の距離を計算する
     def _cal_matrix_path_out(self, fill='max', log_flag=True):
@@ -544,6 +635,8 @@ class Modified_GraphSubModular(GraphSubModular):
         g.add_edges(list_edgelist)
         G = np.array(g.get_adjacency()._data)
         G = G / np.sum(G, axis=1, dtype=float)[:,np.newaxis]
+        G[np.isinf(G)] = 0.0
+        G[np.isnan(G)] = 0.0
         G = G.T
         S = np.identity(len(self._list_node))
         for iter in range(iteration):
@@ -573,13 +666,13 @@ class Modified_GraphSubModular(GraphSubModular):
         matrix_tmp = self._d_matrix[:,list_c_id]
         # スケーリング関数: e^x
         if scale == 0:
-            f_C = np.sum(np.exp(np.amin(matrix_tmp, axis=1)))
+            f_C = np.sum(np.exp(np.amax(matrix_tmp, axis=1)))
         # スケーリング関数: x
         elif scale == 1:
-            f_C = np.sum(np.amin(matrix_tmp, axis=1))
+            f_C = np.sum(np.amax(matrix_tmp, axis=1))
         # スケーリング関数: ln_x
         else:
-            f_C = np.sum(np.log(np.amin(matrix_tmp, axis=1)))
+            f_C = np.sum(np.log(np.amax(matrix_tmp, axis=1)))
 
         return f_C
 
@@ -598,6 +691,7 @@ class Modified_GraphSubModular(GraphSubModular):
         # f_C: 現在のコストの計算
         f_C = self._cal_cost(list_c_word=list_c_word,
                              scale=scale)
+        
         # 文書を一つずつ追加した時のスコアの増分を計算する
         list_return = list_id_sep_sepall[0]
         delta_max = 0.0
@@ -612,7 +706,7 @@ class Modified_GraphSubModular(GraphSubModular):
             if delta > delta_max:
                 delta_max = delta
                 list_return = [doc_id, sep, sepall]
-            return list_return
+        return list_return
 
 
     def m_greedy(self, num_w = 100, r=1, scale=0):
@@ -643,7 +737,7 @@ class Modified_GraphSubModular(GraphSubModular):
             list_id_sep_sepall.remove([doc_id, sep, sepall])
 
         f_max = 0.0
-        list_return = list_id_sep_sepall[0]
+        list_return = list_id_sep_sepall_copy[0]
         for doc_id, sep, sepall in list_id_sep_sepall_copy:
             # documentに含まれる単語のリスト
             list_c_word = sorted(list(set([word for word in sep])))
