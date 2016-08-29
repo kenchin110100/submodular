@@ -534,6 +534,7 @@ class Modified_GraphSubModular(GraphSubModular):
         g = Graph(directed=self._directed)
         g.add_vertices(self._list_node)
         g.add_edges(self._list_edge)
+        g.es['weight'] = self._list_weight
         G = np.array(g.get_adjacency()._data)
         G = G / np.sum(G, axis=1, dtype=float)[:,np.newaxis]
         G = G.T
