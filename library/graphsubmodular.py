@@ -477,7 +477,8 @@ class Modified_GraphSubModular(GraphSubModular):
 
         # 距離行列の作成
         if self._simrank_flag == True:
-            self._matrix = self._cal_simrank(C=0.8, iteration=10)
+            self._matrix = self._cal_simrank(list_edgelist=list_edgelist,
+                                             C=0.8, iteration=10)
         else:
             self._matrix = self._cal_matrix_path_out(fill='max', log_flag=log_flag)
 
@@ -530,11 +531,10 @@ class Modified_GraphSubModular(GraphSubModular):
             matrix[i][i] = 0
         return matrix
 
-    def _cal_simrank(self, C=0.8, iteration=10):
+    def _cal_simrank(self, list_edgelist, C=0.8, iteration=10):
         g = Graph(directed=self._directed)
         g.add_vertices(self._list_node)
-        g.add_edges(self._list_edge)
-        g.es['weight'] = self._list_weight
+        g.add_edges(list_edgelist)
         G = np.array(g.get_adjacency()._data)
         G = G / np.sum(G, axis=1, dtype=float)[:,np.newaxis]
         G = G.T
