@@ -475,21 +475,20 @@ class Modified_Vector(object):
         :param scale: スケール関数に何を使うか, 0: e^x, 1: x, 2: ln_x
         :return: f_C (計算したコスト)
         """
-        f_C = 0.0
-        # すべての単語を検索
-        for row_id in range(len(self._list_bag)):
-            # 対象の行の抜き出し
-            row = self._d_matrix[row_id][list_C_id]
-            # スケーリング関数: e^x
+        # 初めは0を返す
+        if len(list_C_id) == 0:
+            return 0.0
+        else:
+            f_C = 0.0
+            # すべての単語を検索
+            matrix_tmp = self._d_matrix[:,list_C_id]
             if scale == 0:
-                f_C -= np.exp(np.amin(row))
-            # スケーリング関数: x
+                f_C = -1 * np.sum(np.exp(np.amin(matrix_tmp, axis=1)))
             elif scale == 1:
-                f_C -= np.amin(row)
-            # スケーリング関数: ln_x
+                f_C = -1 * np.sum(np.amin(matrix_tmp, axis=1))
             else:
-                f_C -= np.log(np.amin(row))
-        return f_C
+                f_C = -1 * np.sum(np.log(np.amin(matrix_tmp, axis=1)))
+            return f_C
 
     def _m_greedy_1(self, list_C_id, list_id_sep_sepall, r=1, scale=0):
         """
@@ -501,38 +500,22 @@ class Modified_Vector(object):
         :param scale: スケーリング関数、0: e^x, 1: x, 2: ln_x
         :return: doc: idとその単語のリスト
         """
-        # list_Cが空の時
-        if len(list_C_id) == 0:
-            # 計算したスコアを記録するためのリスト
-            list_id_score = []
-            for doc_id, sep, sepall in list_id_sep_sepall:
-                # スコアの計算
-                f_C = self._cal_cost(list_C_id=[doc_id],
-                                     scale=scale)
-                f_C = f_C/(np.power(len(sepall), r))
-                # リストにidとbagとスコアを記録
-                list_id_score.append([doc_id, sep, sepall, f_C])
-            # スコアが最大になるものを取得
-            doc_id, sep, sepall, _ = sorted(list_id_score, key=lambda x: x[3], reverse=True)[0]
-            return [doc_id, sep, sepall]
-        # list_Cが空ではないとき
-        else:
-            # f_C: 現在のコストの計算
-            f_C = self._cal_cost(list_C_id=list_C_id,
+        # f_C: 現在のコストの計算
+        f_C = self._cal_cost(list_C_id=list_C_id,
                                  scale=scale)
-            # 文書を一つずつ追加した時のスコアの増分を計算する
-            list_id_score = []
-            for doc_id, sep, sepall in list_id_sep_sepall:
-                # コストの計算
-                f_C_s = self._cal_cost(list_C_id=list_C_id+[doc_id],
-                                       scale=scale)
-                # スコアの増分を計算
-                delta = (f_C_s - f_C) / np.power(len(sepall), r)
-                # スコアの増分を記録
-                list_id_score.append([doc_id, sep, sepall, delta])
-            # スコアの増分が一番大きかったdocを返す
-            doc_id, sep, sepall, _ = sorted(list_id_score, key=lambda x: x[3], reverse=True)[0]
-            return [doc_id, sep, sepall]
+        # 文書を一つずつ追加した時のスコアの増分を計算する
+        list_id_score = []
+        for doc_id, sep, sepall in list_id_sep_sepall:
+            # コストの計算
+            f_C_s = self._cal_cost(list_C_id=list_C_id+[doc_id],
+                                   scale=scale)
+            # スコアの増分を計算
+            delta = (f_C_s - f_C) / np.power(len(sepall), r)
+            # スコアの増分を記録
+            list_id_score.append([doc_id, sep, sepall, delta])
+        # スコアの増分が一番大きかったdocを返す
+        doc_id, sep, sepall, _ = sorted(list_id_score, key=lambda x: x[3], reverse=True)[0]
+        return [doc_id, sep, sepall]
 
     def m_greedy(self, num_w=100, r=1, scale=0):
         """
