@@ -783,7 +783,7 @@ class Partition_GraphSubModular(Modified_GraphSubModular):
         unique_n = list(set(dict_pos_word['n']))
         unique_j = list(set(dict_pos_word['j']))
         unique_v = list(set(dict_pos_word['v']))
-        unique_o = list(set(dict_pos_word['o']))
+        unique_o = list(set(dict_pos_word['-']))
 
         # 名詞のmatrix
         d_matrix_n = np.array([self._matrix[word_id] for word_id in dict_pos_word['n']])
@@ -795,7 +795,7 @@ class Partition_GraphSubModular(Modified_GraphSubModular):
         d_matrix_v = np.array([self._matrix[word_id] for word_id in dict_pos_word['v']])
 
         # それ以外のmatrix
-        d_matrix_o = np.array([self._matrix[word_id] for word_id in dict_pos_word['o']])
+        d_matrix_o = np.array([self._matrix[word_id] for word_id in dict_pos_word['-']])
 
         return d_matrix_n, d_matrix_j, d_matrix_v, d_matrix_o
 
@@ -829,31 +829,34 @@ class Partition_GraphSubModular(Modified_GraphSubModular):
                                 for word, pos in zip(list_c_word, list_c_pos)
                                 if pos == '-'])
             list_o_id = list(set(list_o_id))
-            f_C = 0.0
             # すべての単語を検索
             matrix_n = self._d_matrix_n[:,list_n_id]
             matrix_j = self._d_matrix_n[:,list_j_id]
             matrix_v = self._d_matrix_n[:,list_v_id]
             matrix_o = self._d_matrix_n[:,list_o_id]
-
+            list_matrix = [matrix_n, matrix_j, matrix_v, matrix_o]
+            list_bias = [self._n, self._j, self._v, self._o]
+            
             # スケーリング関数: e^x
             if scale == 0:
-                f_C = self._n * np.sum(np.exp(np.amax(matrix_n, axis=1))) + \
-                      self._j * np.sum(np.exp(np.amax(matrix_j, axis=1))) + \
-                      self._v * np.sum(np.exp(np.amax(matrix_v, axis=1))) + \
-                      self._o * np.sum(np.exp(np.amax(matrix_o, axis=1)))
+                f_C = 0.0
+                for matrix, bias in zip(list_matrix, list_bias):
+                    if matrix.shape[1] != 0:
+                        f_C += bias * np.sum(np.exp(np.amax(matrix, axis=1)))
+
             # スケーリング関数: x
             elif scale == 1:
-                f_C = self._n * np.sum(np.amax(matrix_n, axis=1)) + \
-                      self._j * np.sum(np.amax(matrix_j, axis=1)) + \
-                      self._v * np.sum(np.amax(matrix_v, axis=1)) + \
-                      self._o * np.sum(np.amax(matrix_o, axis=1))
+                f_C = 0.0
+                for matrix, bias in zip(list_matrix, list_bias):
+                    if matrix.shape[1] != 0:
+                        f_C += bias * np.sum(np.amax(matrix, axis=1))
+
             # スケーリング関数: ln_x
             else:
-                f_C = self._n * np.sum(np.log(np.amax(matrix_n, axis=1))) + \
-                      self._j * np.sum(np.log(np.amax(matrix_j, axis=1))) + \
-                      self._v * np.sum(np.log(np.amax(matrix_v, axis=1))) + \
-                      self._o * np.sum(np.log(np.amax(matrix_o, axis=1)))
+                f_C = 0.0
+                for matrix, bias in zip(list_matrix, list_bias):
+                    if matrix.shape[1] != 0:
+                        f_C += bias * np.sum(np.log(np.amax(matrix, axis=1)))
 
         return f_C
 
@@ -869,9 +872,13 @@ class Partition_GraphSubModular(Modified_GraphSubModular):
         """
         # 現在のlist_Cに含まれるユニークな単語のリストを作成
         list_c_word_pos = sorted(list(set([word_pos for row in list_C for word_pos in row[1]])))
-        list_c_word, list_c_pos = zip(*list_c_word_pos)
-        list_c_word = list(list_c_word)
-        list_c_pos = list(list_c_pos)
+        if len(list_c_word_pos) == 0:
+            list_c_word = []
+            list_c_pos = []
+        else:
+            list_c_word, list_c_pos = zip(*list_c_word_pos)
+            list_c_word = list(list_c_word)
+            list_c_pos = list(list_c_pos)
         # f_C: 現在のコストの計算
         f_C = self._cal_cost(list_c_word=list_c_word,
                              list_c_pos=list_c_pos,
@@ -914,9 +921,11 @@ class Partition_GraphSubModular(Modified_GraphSubModular):
         self._v = v
         self._o = o
         # list_id_documentの作成
-        list_id_sep_pos_sepall = [[i, (row[0], row[1]), row[2]]
-                              for i, row in enumerate(zip(self._list_bag, self._list_pos, self._list_bag_all))
-                              if len(row[0]) > 0]
+        list_id_sep_pos_sepall = [[i, [(word, pos) for word, pos in zip(row[0], row[1])], row[2]]
+                                  for i, row in enumerate(zip(self._list_bag,
+                                                              self._list_pos,
+                                                              self._list_bag_all))
+                                  if len(row[0]) > 0]
         list_id_sep_pos_sepall_copy = copy.deepcopy(list_id_sep_pos_sepall)
         # 要約文書のリスト
         list_C = []
@@ -925,7 +934,7 @@ class Partition_GraphSubModular(Modified_GraphSubModular):
         while len(list_id_sep_pos_sepall):
             # コストが一番高くなる組み合わせを計算
             doc_id, sep_pos, sepall = self._m_greedy_1(list_C=list_C,
-                                                       list_id_sep_sepall=list_id_sep_pos_sepall,
+                                                       list_id_sep_pos_sepall=list_id_sep_pos_sepall,
                                                        r=r, scale=scale)
             if C_word + len(sepall) <= num_w:
                 # 採用したリストをappend
