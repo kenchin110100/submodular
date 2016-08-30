@@ -757,3 +757,210 @@ class Modified_GraphSubModular(object):
             self._list_C = [list_return]
 
         print '計算が終了しました'
+
+
+# 品詞ごとにバイアスをかける
+class Partition_GraphSubModular(Modified_GraphSubModular):
+
+    def __init__(self, list_sep_all, list_sep, list_pos, list_edgelist=None, directed=True, simrank_flag=True, weighted=False, log_flag=True):
+        super(Partition_GraphSubModular, self).__init__(list_sep_all, list_sep, list_edgelist, directed, simrank_flag, weighted, log_flag)
+        self._list_pos = list_pos
+        # 品詞ごとの距離行列を作成する
+        self._d_matrix_n, self._d_matrix_j, self._d_matrix_v, self._d_matrix_o = self._cal_partition_matrix()
+
+
+    # 品詞ごとの距離行列を作成する
+    def _cal_partition_matrix(self):
+        dict_pos_word = {'n': [],
+                         'j': [],
+                         'v': [],
+                         '-': []}
+
+        for bags, poses in zip(self._list_bag, self._list_pos):
+            for word, pos in zip(bags, poses):
+                dict_pos_word[pos].append(self._dict_word_id[word])
+
+        unique_n = list(set(dict_pos_word['n']))
+        unique_j = list(set(dict_pos_word['j']))
+        unique_v = list(set(dict_pos_word['v']))
+        unique_o = list(set(dict_pos_word['o']))
+
+        # 名詞のmatrix
+        d_matrix_n = np.array([self._matrix[word_id] for word_id in dict_pos_word['n']])
+
+        # 形容詞のmatrix
+        d_matrix_j = np.array([self._matrix[word_id] for word_id in dict_pos_word['j']])
+
+        # 動詞のmatrix
+        d_matrix_v = np.array([self._matrix[word_id] for word_id in dict_pos_word['v']])
+
+        # それ以外のmatrix
+        d_matrix_o = np.array([self._matrix[word_id] for word_id in dict_pos_word['o']])
+
+        return d_matrix_n, d_matrix_j, d_matrix_v, d_matrix_o
+
+    # コストの計算
+    def _cal_cost(self, list_c_word, list_c_pos, scale):
+        """
+        コストの計算
+        :param list_c_word: 現在採用している文の中に含まれる単語
+        :param distance_matrix: W * Vの距離行列
+        :param scale: スケール関数に何を使うか, 0: e^x, 1: x, 2: ln_x
+        :return: f_C (計算したコスト)
+        """
+        # 単語が入ってなければ0を返す
+        if len(list_c_word) == 0:
+            return 0.0
+        else:
+            # 品詞ごとに単語をidに変換
+            list_n_id = sorted([self._dict_word_id[word]
+                                for word, pos in zip(list_c_word, list_c_pos)
+                                if pos == 'n'])
+            list_n_id = list(set(list_n_id))
+            list_j_id = sorted([self._dict_word_id[word]
+                                for word, pos in zip(list_c_word, list_c_pos)
+                                if pos == 'j'])
+            list_j_id = list(set(list_j_id))
+            list_v_id = sorted([self._dict_word_id[word]
+                                for word, pos in zip(list_c_word, list_c_pos)
+                                if pos == 'v'])
+            list_v_id = list(set(list_v_id))
+            list_o_id = sorted([self._dict_word_id[word]
+                                for word, pos in zip(list_c_word, list_c_pos)
+                                if pos == '-'])
+            list_o_id = list(set(list_o_id))
+            f_C = 0.0
+            # すべての単語を検索
+            matrix_n = self._d_matrix_n[:,list_n_id]
+            matrix_j = self._d_matrix_n[:,list_j_id]
+            matrix_v = self._d_matrix_n[:,list_v_id]
+            matrix_o = self._d_matrix_n[:,list_o_id]
+
+            # スケーリング関数: e^x
+            if scale == 0:
+                f_C = self._n * np.sum(np.exp(np.amax(matrix_n, axis=1))) + \
+                      self._j * np.sum(np.exp(np.amax(matrix_j, axis=1))) + \
+                      self._v * np.sum(np.exp(np.amax(matrix_v, axis=1))) + \
+                      self._o * np.sum(np.exp(np.amax(matrix_o, axis=1)))
+            # スケーリング関数: x
+            elif scale == 1:
+                f_C = self._n * np.sum(np.amax(matrix_n, axis=1)) + \
+                      self._j * np.sum(np.amax(matrix_j, axis=1)) + \
+                      self._v * np.sum(np.amax(matrix_v, axis=1)) + \
+                      self._o * np.sum(np.amax(matrix_o, axis=1))
+            # スケーリング関数: ln_x
+            else:
+                f_C = self._n * np.sum(np.log(np.amax(matrix_n, axis=1))) + \
+                      self._j * np.sum(np.log(np.amax(matrix_j, axis=1))) + \
+                      self._v * np.sum(np.log(np.amax(matrix_v, axis=1))) + \
+                      self._o * np.sum(np.log(np.amax(matrix_o, axis=1)))
+
+        return f_C
+
+    def _m_greedy_1(self, list_C, list_id_sep_pos_sepall, r=1, scale=0):
+        """
+        修正貪欲法の一周分
+        :param list_C: 現在採用している文のbag_of_words
+        :param list_id_document: それ以外の採用候補
+        :param distance_matrix: 距離行列, W * V
+        :param r: 文字数に対するコストをどれだけかけるか
+        :param scale: スケーリング関数、0: e^x, 1: x, 2: ln_x
+        :return: doc: idとその単語のリスト
+        """
+        # 現在のlist_Cに含まれるユニークな単語のリストを作成
+        list_c_word_pos = sorted(list(set([word_pos for row in list_C for word_pos in row[1]])))
+        list_c_word, list_c_pos = zip(*list_c_word_pos)
+        list_c_word = list(list_c_word)
+        list_c_pos = list(list_c_pos)
+        # f_C: 現在のコストの計算
+        f_C = self._cal_cost(list_c_word=list_c_word,
+                             list_c_pos=list_c_pos,
+                             scale=scale)
+
+        # 文書を一つずつ追加した時のスコアの増分を計算する
+        list_return = list_id_sep_pos_sepall[0]
+        delta_max = 0.0
+        for doc_id, sep_pos, sepall in list_id_sep_pos_sepall:
+            # 文章の追加
+            list_c_word_pos_s = list(set(list_c_word_pos + sep_pos))
+            list_c_word_s, list_c_pos_s = zip(*list_c_word_pos_s)
+
+            list_c_word_s = list(list_c_word_s)
+            list_c_pos_s = list(list_c_pos_s)
+
+            # コストの計算
+            f_C_s = self._cal_cost(list_c_word=list_c_word_s,
+                                   list_c_pos=list_c_pos_s,
+                                   scale=scale)
+            # スコアの増分を計算
+            delta = (f_C_s - f_C) / np.power(len(sepall), r)
+            if delta > delta_max:
+                delta_max = delta
+                list_return = [doc_id, sep_pos, sepall]
+        return list_return
+
+
+    def m_greedy(self, num_w = 100, r=1, scale=0, n=0.2, j=0.2, v=0.2, o=0.2):
+        """
+        修正貪欲法による文章の抽出
+        :param num_w: 単語数の制約
+        :param r: 単語数に対するコストのパラメータ
+        :param scale: スケーリング関数, 0: e^x, 1: x, 2: ln_x
+        :return: 抽出した文章のidとそのbag_of_wordsのリスト
+        """
+        # 係数をセット
+        self._n = n
+        self._j = j
+        self._v = v
+        self._o = o
+        # list_id_documentの作成
+        list_id_sep_pos_sepall = [[i, (row[0], row[1]), row[2]]
+                              for i, row in enumerate(zip(self._list_bag, self._list_pos, self._list_bag_all))
+                              if len(row[0]) > 0]
+        list_id_sep_pos_sepall_copy = copy.deepcopy(list_id_sep_pos_sepall)
+        # 要約文書のリスト
+        list_C = []
+        # num_sで指定した文章数を抜き出すまで繰り返す
+        C_word = 0
+        while len(list_id_sep_pos_sepall):
+            # コストが一番高くなる組み合わせを計算
+            doc_id, sep_pos, sepall = self._m_greedy_1(list_C=list_C,
+                                                       list_id_sep_sepall=list_id_sep_pos_sepall,
+                                                       r=r, scale=scale)
+            if C_word + len(sepall) <= num_w:
+                # 採用したリストをappend
+                list_C.append([doc_id, sep_pos, sepall])
+                C_word += len(sepall)
+            # 元の集合からremove
+            list_id_sep_pos_sepall.remove([doc_id, sep_pos, sepall])
+
+        f_max = 0.0
+        list_return = list_id_sep_pos_sepall_copy[0]
+        for doc_id, sep_pos, sepall in list_id_sep_pos_sepall_copy:
+            # documentに含まれる単語のリスト
+            list_sep_pos = sorted(list(set([word for word in sep_pos])))
+            list_c_word, list_c_pos = zip(*list_sep_pos)
+            list_c_word = list(list_c_word)
+            list_c_pos = list(list_c_pos)
+            # スコアの計算
+            f_C = self._cal_cost(list_c_word=list_c_word,
+                                 list_c_pos=list_c_pos,
+                                 scale=scale)
+            if f_C > f_max:
+                f_max = f_C
+                list_return = [doc_id, sep_pos, sepall]
+
+        list_sep_pos = sorted(list(set([sep_pos for row in list_C for sep_pos in row[1]])))
+        list_c_word, list_c_pos = zip(*list_sep_pos)
+        list_c_word = list(list_c_word)
+        list_c_pos = list(list_c_pos)
+        f_C = self._cal_cost(list_c_word=list_c_word,
+                             list_c_pos=list_c_pos,
+                             scale=scale)
+
+        if f_C >= f_max:
+            self._list_C = list_C
+        else:
+            self._list_C = [list_return]
+
+        print '計算が終了しました'
