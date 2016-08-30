@@ -324,6 +324,7 @@ class Modified_Vector(object):
                                       dict_id_word=self._dict_id_word,
                                       num_row=len(self._list_bag),
                                       num_col=len(self._list_unique_word))
+        
         # 距離行列の作成
         self._d_matrix = self._cal_matrix()
         # 最終的に出力するリスト
