@@ -16,5 +16,4 @@ class SlackBot(object):
                          "\"text\":\"%s\","%text + \
                          "\"icon_emoji\":\"%s\"}\' %s"%(icon_emoji, url)
 
-
         os.system(cmd)
