@@ -1144,7 +1144,7 @@ class Multiplex_GraphSubModular(object):
             list_edgelist.extend([[row[i], row[i+1]] for i in range(len(row)-1)])
         return list_edgelist
 
-    def _cal_simrank(self, list_edgelist, C=0.8, iteration=10):
+    def _cal_simrank(self, list_edgelist, C=0.8, iteration=20):
         g = Graph(directed=False)
         g.add_vertices(self._list_node)
         g.add_edges(list_edgelist)
