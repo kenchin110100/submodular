@@ -8,6 +8,7 @@ import numpy as np
 from scipy.sparse import lil_matrix
 import itertools
 import copy
+from filer2.filer2 import Filer
 
 
 class GraphSubModular(object):
@@ -1008,14 +1009,14 @@ class Multiplex_GraphSubModular(object):
         # 距離行列の作成
         if self._weighted == True:
             self._matrix_c = self._cal_simrank(list_edgelist=self._list_edge_all_c,
-                                               C=0.8, iteration=10)
+                                               C=0.8, iteration=20)
             self._matrix_b = self._cal_simrank(list_edgelist=self._list_edge_all_b,
-                                               C=0.8, iteration=10)
+                                               C=0.8, iteration=20)
         else:
             self._matrix_c = self._cal_simrank(list_edgelist=self._list_edge_c,
-                                               C=0.8, iteration=10)
+                                               C=0.8, iteration=20)
             self._matrix_b = self._cal_simrank(list_edgelist=self._list_edge_b,
-                                               C=0.8, iteration=10)
+                                               C=0.8, iteration=20)
 
         # 全単語のリスト
         self._list_all_word = [word for row in self._list_bag for word in row]
@@ -1291,6 +1292,426 @@ class Multiplex_GraphSubModular(object):
                                scale=scale)
         f_C_b = self._cal_cost(list_c_word=list_c_word,
                                d_matrix=self._d_matrix_b,
+                               scale=scale)
+
+        f_C = self._a*f_C_c + self._b*f_C_b
+
+        if f_C >= f_max:
+            self._list_C = list_C
+        else:
+            self._list_C = [list_return]
+
+        print '計算が終了しました'
+        
+
+class Polarity_GraphSubModular(object):
+    """
+    極性辞書を用いて、ポジティブネットワーク、ネガティブネットワークを作成する
+    """
+
+    def __init__(self, list_sep, list_sep_lemmas, dict_path, weighted=False, threshold=0.5, identity=0.5, mode='bigram'):
+        """
+
+        :param list_sep:
+        :param list_sep_lemmas:
+        :param dict_path:
+        :param weighted:
+        :param threshold:
+        :param identity:
+        """
+        # simrankを計算する時にweightをかけるかどうか
+        self._weighted = weighted
+        # 極性辞書のパス
+        self._dict_path = dict_path
+        self._dict_word_polarity = Filer.readdump(self._dict_path)
+        # simrankのidentityの調整
+        self._identity = identity
+        # corを使うかbigramを使うか
+        self._mode = mode
+
+        # bag_of_words
+        self._list_bag = list_sep
+        self._list_bag_lemmas = [[(word, lemmas) for word, lemmas in zip(sep, sep_lemmas)] for sep, sep_lemmas in zip(list_sep, list_sep_lemmas)]
+        # inputfileからnode, edge, weightを計算
+        self._list_node, self._list_edge_p, self._list_weight_p, self._list_edge_all_p = self._cal_node_edge_weight(self._list_bag_lemmas, flag='pos', threshold=threshold)
+        _, self._list_edge_n, self._list_weight_n, self._list_edge_all_n = self._cal_node_edge_weight(self._list_bag_lemmas, flag='neg', threshold=-1*threshold)
+
+        # 単語のword_idのdictを作成する
+        self._dict_word_id = {word: i for i, word in enumerate(self._list_node)}
+
+        # 距離行列の作成
+        if self._weighted == True:
+            self._matrix_p = self._cal_simrank(list_edgelist=self._list_edge_all_p,
+                                               C=0.8, iteration=20)
+            self._matrix_n = self._cal_simrank(list_edgelist=self._list_edge_all_n,
+                                               C=0.8, iteration=20)
+        else:
+            self._matrix_p = self._cal_simrank(list_edgelist=self._list_edge_p,
+                                               C=0.8, iteration=20)
+            self._matrix_n = self._cal_simrank(list_edgelist=self._list_edge_n,
+                                               C=0.8, iteration=20)
+
+        # 全単語のリスト
+        self._list_all_word = [word for row in self._list_bag for word in row]
+        self._d_matrix_p = np.array([self._matrix_p[self._dict_word_id[word]] for word in self._list_all_word])
+        self._d_matrix_n = np.array([self._matrix_n[self._dict_word_id[word]] for word in self._list_all_word])
+        # 抽出した文章の集合
+        self._list_C = []
+
+    @property
+    def dict_word_id(self):
+        print 'property: dict_word_id'
+        return self._dict_word_id
+
+    @dict_word_id.setter
+    def dict_word_id(self, value):
+        print 'setter: dict_word_id'
+        self._dict_word_id = value
+
+    @dict_word_id.deleter
+    def dict_word_id(self):
+        print 'deleter: dict_word_id'
+        del self._dict_word_id
+
+    @property
+    def matrix_p(self):
+        print 'property: matrix_p'
+        return self._matrix_p
+
+    @matrix_p.setter
+    def matrix_p(self, value):
+        print 'setter: matrix_p'
+        self._matrix_p = value
+
+    @matrix_p.deleter
+    def matrix_p(self):
+        print 'deleter: matrix_p'
+        del self._matrix_p
+
+    @property
+    def matrix_n(self):
+        print 'property: matrix_n'
+        return self._matrix_n
+
+    @matrix_n.setter
+    def matrix_n(self, value):
+        print 'setter: matrix_n'
+        self._matrix_n = value
+
+    @matrix_n.deleter
+    def matrix_n(self):
+        print 'deleter: matrix_n'
+        del self._matrix_n
+
+    @property
+    def list_all_word(self):
+        print 'property: list_all_word'
+        return self._list_all_word
+
+    @list_all_word.setter
+    def list_all_word(self, value):
+        print 'setter: list_all_word'
+        self._list_all_word = value
+
+    @list_all_word.deleter
+    def list_all_word(self):
+        print 'deleter: list_all_word'
+        del self._list_all_word
+        self._list_all_word = []
+
+    @property
+    def list_C(self):
+        print 'property: list_C'
+        return self._list_C
+
+    @list_C.setter
+    def list_C(self, value):
+        print 'setter: list_C'
+        self._list_C = value
+
+    @list_C.deleter
+    def list_C(self):
+        print 'deleter: list_C'
+        del self._list_C
+        self._list_C = []
+
+    # 入力されたエッジリストから、list_node, list_edge, list_weightを計算する
+    def _cal_node_edge_weight(self, list_bag, flag='pos', threshold=0.5):
+        """
+        list_bag: bag_of_words
+        flag: 'pos' or 'neg'
+        """
+        if self._mode == 'cor':
+            if flag == 'pos':
+                list_edgelist = self._cal_bag_edgelist_p(list_bag, threshold=threshold)
+            else:
+                list_edgelist = self._cal_bag_edgelist_n(list_bag, threshold=threshold)
+        elif self._mode == 'bigram':
+            if flag == 'pos':
+                list_edgelist = self._cal_bag_edgelist_p_b(list_bag, threshold=threshold)
+            else:
+                list_edgelist = self._cal_bag_edgelist_n_b(list_bag, threshold=threshold)
+        # 有向エッジリストを無向エッジリストに変換する
+        list_edge = [tuple(sorted(row)) for row in list_edgelist]
+        # ノードリスト
+        list_node = list(set([word[0] for row in list_bag for word in row]))
+        # エッジリストとそのweightを作成
+        tuple_edge, tuple_weight = zip(*collections.Counter(list_edge).items())
+
+        return list_node, list(tuple_edge), list(tuple_weight), list_edge
+
+    def _cal_bag_edgelist_p(self, list_bag, threshold):
+        """
+        bag_of_wordsをedgelistに変換する
+        list_bag: bag_of_words
+        return: list_edgelist
+        """
+        list_edgelist = []
+        for row in list_bag:
+            list_edgelist.extend(list(itertools.combinations(tuple(row),2)))
+        list_edgelist_p = []
+        for row in list_edgelist:
+            word1 = row[0][0]
+            word1_lemmas = row[0][1]
+            word2 = row[1][0]
+            word2_lemmas = row[1][1]
+            if word1_lemmas in self._dict_word_polarity and word2_lemmas in self._dict_word_polarity:
+                if self._dict_word_polarity[word1_lemmas] >= threshold and self._dict_word_polarity[word2_lemmas] >= threshold:
+                    list_edgelist_p.append((word1, word2))
+            elif word1_lemmas in self._dict_word_polarity:
+                if self._dict_word_polarity[word1_lemmas] >= threshold:
+                    list_edgelist_p.append((word1, word2))
+            elif word2_lemmas in self._dict_word_polarity:
+                if self._dict_word_polarity[word2_lemmas] >= threshold:
+                    list_edgelist_p.append((word1, word2))
+
+        return list_edgelist_p
+    
+    def _cal_bag_edgelist_p_b(self, list_bag, threshold):
+        """
+        bag_of_wordsをedgelistに変換する
+        list_bag: bag_of_words
+        return: list_edgelist
+        """
+        list_edgelist = []
+        for row in list_bag:
+            list_edgelist.extend([(row[i], row[i+1]) for i in range(len(row)-1)])
+
+        list_edgelist_p = []
+        for row in list_edgelist:
+            word1 = row[0][0]
+            word1_lemmas = row[0][1]
+            word2 = row[1][0]
+            word2_lemmas = row[1][1]
+            if word2_lemmas in self._dict_word_polarity:
+                if self._dict_word_polarity[word2_lemmas] >= threshold:
+                    list_edgelist_p.append((word1, word2))
+            elif word1_lemmas in self._dict_word_polarity:
+                if self._dict_word_polarity[word1_lemmas] >= threshold:
+                    list_edgelist_p.append((word1, word2))
+
+        return list_edgelist_p
+    
+    def _cal_bag_edgelist_n(self, list_bag, threshold):
+        """
+        bag_of_wordsをedgelistに変換する
+        list_bag: bag_of_words
+        return: list_edgelist
+        """
+        list_edgelist = []
+        for row in list_bag:
+            list_edgelist.extend(list(itertools.combinations(tuple(row),2)))
+        list_edgelist_n = []
+        for row in list_edgelist:
+            word1 = row[0][0]
+            word1_lemmas = row[0][1]
+            word2 = row[1][0]
+            word2_lemmas = row[1][1]
+            if word1_lemmas in self._dict_word_polarity and word2_lemmas in self._dict_word_polarity:
+                if self._dict_word_polarity[word1_lemmas] <= threshold and self._dict_word_polarity[word2_lemmas] <= threshold:
+                    list_edgelist_n.append((word1, word2))
+            elif word1_lemmas in self._dict_word_polarity:
+                if self._dict_word_polarity[word1_lemmas] <= threshold:
+                    list_edgelist_n.append((word1, word2))
+            elif word2_lemmas in self._dict_word_polarity:
+                if self._dict_word_polarity[word2_lemmas] <= threshold:
+                    list_edgelist_n.append((word1, word2))
+
+        return list_edgelist_n
+    
+    def _cal_bag_edgelist_n_b(self, list_bag, threshold=0.0):
+        """
+        bag_of_wordsをedgelistに変換する
+        list_bag: bag_of_words
+        return: list_edgelist
+        """
+        list_edgelist = []
+        for row in list_bag:
+            list_edgelist.extend([(row[i], row[i+1]) for i in range(len(row)-1)])
+        list_edgelist_n = []
+        for row in list_edgelist:
+            word1 = row[0][0]
+            word1_lemmas = row[0][1]
+            word2 = row[1][0]
+            word2_lemmas = row[1][1]
+            if word2_lemmas in self._dict_word_polarity:
+                if self._dict_word_polarity[word2_lemmas] <= threshold:
+                    list_edgelist_n.append((word1, word2))
+            elif word1_lemmas in self._dict_word_polarity:
+                if self._dict_word_polarity[word1_lemmas] <= threshold:
+                    list_edgelist_n.append((word1, word2))
+
+        return list_edgelist_n
+
+    def _cal_simrank(self, list_edgelist, C=0.8, iteration=20):
+        g = Graph(directed=False)
+        g.add_vertices(self._list_node)
+        g.add_edges(list_edgelist)
+        G = np.array(g.get_adjacency()._data)
+        G = G / np.sum(G, axis=1, dtype=float)[:,np.newaxis]
+        G[np.isinf(G)] = 0.0
+        G[np.isnan(G)] = 0.0
+        G = G.T
+        S = np.identity(len(self._list_node))
+        for iter in range(iteration):
+            S = C * np.dot(np.dot(G.T, S), G)
+            for i in range(len(self._list_node)):
+                S[i][i] = 1.0
+        for i in range(len(self._list_node)):
+            S[i][i] = self._identity
+        return S
+
+    # コストの計算
+    def _cal_cost(self, list_c_word, d_matrix, scale):
+        """
+        コストの計算
+        :param list_c_word: 現在採用している文の中に含まれる単語
+        :param distance_matrix: W * Vの距離行列
+        :param scale: スケール関数に何を使うか, 0: e^x, 1: x, 2: ln_x
+        :return: f_C (計算したコスト)
+        """
+        # 単語が入ってなければ0を返す
+        if len(list_c_word) == 0:
+            return 0.0
+        # 単語をidに変換
+        list_c_id = sorted([self._dict_word_id[word] for word in list_c_word])
+        f_C = 0.0
+        # すべての単語を検索
+        matrix_tmp = d_matrix[:,list_c_id]
+        # スケーリング関数: e^x
+        if scale == 0:
+            f_C = np.sum(np.exp(np.amax(matrix_tmp, axis=1)))
+        # スケーリング関数: x
+        elif scale == 1:
+            f_C = np.sum(np.amax(matrix_tmp, axis=1))
+
+        return f_C
+
+    def _m_greedy_1(self, list_C, list_id_sep, r=1, scale=0):
+        """
+        修正貪欲法の一周分
+        :param list_C: 現在採用している文のbag_of_words
+        :param list_id_document: それ以外の採用候補
+        :param distance_matrix: 距離行列, W * V
+        :param r: 文字数に対するコストをどれだけかけるか
+        :param scale: スケーリング関数、0: e^x, 1: x, 2: ln_x
+        :return: doc: idとその単語のリスト
+        """
+        # 現在のlist_Cに含まれるユニークな単語のリストを作成
+        list_c_word = sorted(list(set([word for row in list_C for word in row[1]])))
+        # f_C: 現在のコストの計算
+        f_C_c = self._cal_cost(list_c_word=list_c_word,
+                               d_matrix=self._d_matrix_p,
+                               scale=scale)
+        f_C_b = self._cal_cost(list_c_word=list_c_word,
+                               d_matrix=self._d_matrix_n,
+                               scale=scale)
+
+        f_C = self._a*f_C_c + self._b*f_C_b
+
+        # 文書を一つずつ追加した時のスコアの増分を計算する
+        list_return = list_id_sep[0]
+        delta_max = 0.0
+        for doc_id, sep in list_id_sep:
+            # 文章の追加
+            list_c_word_s = list(set(list_c_word + sep))
+            # コストの計算
+            f_C_c_s = self._cal_cost(list_c_word=list_c_word_s,
+                                     d_matrix=self._d_matrix_p,
+                                     scale=scale)
+            f_C_b_s = self._cal_cost(list_c_word=list_c_word_s,
+                                     d_matrix=self._d_matrix_n,
+                                     scale=scale)
+
+            f_C_s = self._a*f_C_c_s + self._b*f_C_b_s
+
+            # スコアの増分を計算
+            delta = (f_C_s - f_C) / np.power(len(sep), r)
+            if delta > delta_max:
+                delta_max = delta
+                list_return = [doc_id, sep]
+        return list_return
+
+
+    def m_greedy(self, num_w = 100, r=1, scale=0, a=0.5, b=0.5):
+        """
+        修正貪欲法による文章の抽出
+        :param num_w: 単語数の制約
+        :param r: 単語数に対するコストのパラメータ
+        :param scale: スケーリング関数, 0: e^x, 1: x
+        :param a:
+        :param b:
+        :return: 抽出した文章のidとそのbag_of_wordsのリスト
+        """
+        # パラメータのセット
+        self._a = a
+        self._b = b
+        # list_id_documentの作成
+        list_id_sep = [[i, row] for i, row in enumerate(self._list_bag) if len(row) > 0]
+        list_id_sep_copy = copy.deepcopy(list_id_sep)
+        # 要約文書のリスト
+        list_C = []
+        # num_sで指定した文章数を抜き出すまで繰り返す
+        C_word = 0
+        while len(list_id_sep):
+            # コストが一番高くなる組み合わせを計算
+            doc_id, sep = self._m_greedy_1(list_C=list_C,
+                                           list_id_sep=list_id_sep,
+                                           r=r,
+                                           scale=scale)
+            if C_word + len(sep) <= num_w:
+                # 採用したリストをappend
+                list_C.append([doc_id, sep])
+                C_word += len(sep)
+            # 元の集合からremove
+            list_id_sep.remove([doc_id, sep])
+
+        # 一つだけ追加した時のコストの計算
+        f_max = 0.0
+        list_return = list_id_sep_copy[0]
+        for doc_id, sep in list_id_sep_copy:
+            # documentに含まれる単語のリスト
+            list_c_word = sorted(list(set([word for word in sep])))
+            # スコアの計算
+            f_C_c = self._cal_cost(list_c_word=list_c_word,
+                                   d_matrix=self._d_matrix_p,
+                                   scale=scale)
+            f_C_b = self._cal_cost(list_c_word=list_c_word,
+                                   d_matrix=self._d_matrix_n,
+                                   scale=scale)
+            f_C = self._a*f_C_c + self._b*f_C_b
+
+            if f_C > f_max:
+                f_max = f_C
+                list_return = [doc_id, sep]
+
+        # 現在のコスト計算
+        list_c_word = sorted(list(set([word for row in list_C for word in row[1]])))
+        f_C_c = self._cal_cost(list_c_word=list_c_word,
+                               d_matrix=self._d_matrix_p,
+                               scale=scale)
+        f_C_b = self._cal_cost(list_c_word=list_c_word,
+                               d_matrix=self._d_matrix_n,
                                scale=scale)
 
         f_C = self._a*f_C_c + self._b*f_C_b
