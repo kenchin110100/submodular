@@ -1476,13 +1476,13 @@ class Polarity_GraphSubModular(object):
             word2 = row[1][0]
             word2_lemmas = row[1][1]
             if word1_lemmas in self._dict_word_polarity and word2_lemmas in self._dict_word_polarity:
-                if self._dict_word_polarity[word1_lemmas] >= threshold and self._dict_word_polarity[word2_lemmas] >= threshold:
+                if self._dict_word_polarity[word1_lemmas][0] >= threshold and self._dict_word_polarity[word2_lemmas][0] >= threshold:
                     list_edgelist_p.append((word1, word2))
             elif word1_lemmas in self._dict_word_polarity:
-                if self._dict_word_polarity[word1_lemmas] >= threshold:
+                if self._dict_word_polarity[word1_lemmas][0] >= threshold:
                     list_edgelist_p.append((word1, word2))
             elif word2_lemmas in self._dict_word_polarity:
-                if self._dict_word_polarity[word2_lemmas] >= threshold:
+                if self._dict_word_polarity[word2_lemmas][0] >= threshold:
                     list_edgelist_p.append((word1, word2))
 
         return list_edgelist_p
@@ -1504,10 +1504,10 @@ class Polarity_GraphSubModular(object):
             word2 = row[1][0]
             word2_lemmas = row[1][1]
             if word2_lemmas in self._dict_word_polarity:
-                if self._dict_word_polarity[word2_lemmas] >= threshold:
+                if self._dict_word_polarity[word2_lemmas][0] >= threshold:
                     list_edgelist_p.append((word1, word2))
             elif word1_lemmas in self._dict_word_polarity:
-                if self._dict_word_polarity[word1_lemmas] >= threshold:
+                if self._dict_word_polarity[word1_lemmas][0] >= threshold:
                     list_edgelist_p.append((word1, word2))
 
         return list_edgelist_p
@@ -1528,13 +1528,13 @@ class Polarity_GraphSubModular(object):
             word2 = row[1][0]
             word2_lemmas = row[1][1]
             if word1_lemmas in self._dict_word_polarity and word2_lemmas in self._dict_word_polarity:
-                if self._dict_word_polarity[word1_lemmas] <= threshold and self._dict_word_polarity[word2_lemmas] <= threshold:
+                if self._dict_word_polarity[word1_lemmas][1] <= threshold and self._dict_word_polarity[word2_lemmas][1] <= threshold:
                     list_edgelist_n.append((word1, word2))
             elif word1_lemmas in self._dict_word_polarity:
-                if self._dict_word_polarity[word1_lemmas] <= threshold:
+                if self._dict_word_polarity[word1_lemmas][1] <= threshold:
                     list_edgelist_n.append((word1, word2))
             elif word2_lemmas in self._dict_word_polarity:
-                if self._dict_word_polarity[word2_lemmas] <= threshold:
+                if self._dict_word_polarity[word2_lemmas][1] <= threshold:
                     list_edgelist_n.append((word1, word2))
 
         return list_edgelist_n
@@ -1555,10 +1555,10 @@ class Polarity_GraphSubModular(object):
             word2 = row[1][0]
             word2_lemmas = row[1][1]
             if word2_lemmas in self._dict_word_polarity:
-                if self._dict_word_polarity[word2_lemmas] <= threshold:
+                if self._dict_word_polarity[word2_lemmas][1] <= threshold:
                     list_edgelist_n.append((word1, word2))
             elif word1_lemmas in self._dict_word_polarity:
-                if self._dict_word_polarity[word1_lemmas] <= threshold:
+                if self._dict_word_polarity[word1_lemmas][1] <= threshold:
                     list_edgelist_n.append((word1, word2))
 
         return list_edgelist_n
